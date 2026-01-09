@@ -1,5 +1,6 @@
 import {
   Home,
+  MessagesSquare,
   Shield
 } from "lucide-react";
 
@@ -25,6 +26,14 @@ export const data = {
       icon: Shield,
       isActive: false,
       nivel_acesso: "acesso",
+    },
+    // /admin/whatsapp
+    {
+      title: "WhatsApp",
+      url: "/admin/whatsapp",
+      icon: MessagesSquare,
+      isActive: false,
+      nivel_acesso: "",
     },
   ],
   flow: [

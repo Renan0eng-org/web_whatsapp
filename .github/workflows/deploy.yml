@@ -1,4 +1,4 @@
-name: Deploy Frontend Prefeitura
+name: Deploy Frontend WhatsApp
 
 on:
   push:
@@ -18,20 +18,17 @@ jobs:
 
       - name: Build e push da imagem
         run: |
-          docker build -t devnardi/web-prefeitura:latest .
-          docker push devnardi/web-prefeitura:latest
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL="https://whatsapp.back.renannardi.com" \
+            -t devnardi/web-whatsapp:latest .
+          docker push devnardi/web-whatsapp:latest
 
-      - name: Atualizar container rodando
+      - name: Subindo novo container
         run: |
-          echo "Removendo container antigo..."
-          docker rm -f web-prefeitura || true
-
-          echo "Atualizando imagem..."
-          docker pull devnardi/web-prefeitura:latest
-
-          echo "Subindo novo container..."
+          docker rm -f web-whatsapp || true
+          docker pull devnardi/web-whatsapp:latest
           docker run -d \
-            --name web-prefeitura \
-            -p 3000:3000 \
-            -e NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
-            devnardi/web-prefeitura:latest
+            --name web-whatsapp \
+            -p 3030:3000 \
+            --network n8n_net \
+            devnardi/web-whatsapp:latest

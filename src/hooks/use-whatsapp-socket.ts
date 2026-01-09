@@ -32,6 +32,9 @@ export function useWhatsAppSocket(sessionId: string | undefined) {
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     
+    console.log(`🔌 Conectando ao WebSocket: ${API_URL}/whatsapp`);
+    console.log(`📱 Session ID: ${sessionId}`);
+    
     // Conecta ao namespace /whatsapp
     const socket = io(`${API_URL}/whatsapp`, {
       transports: ['websocket', 'polling'],
@@ -43,16 +46,22 @@ export function useWhatsAppSocket(sessionId: string | undefined) {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ WebSocket conectado');
+      console.log('✅ WebSocket conectado com sucesso!');
+      console.log('🆔 Socket ID:', socket.id);
       setConnected(true);
       
       // Inscreve na sessão
+      console.log(`📨 Inscrevendo na sessão: ${sessionId}`);
       socket.emit('subscribe', { sessionId });
     });
 
     socket.on('disconnect', () => {
       console.log('❌ WebSocket desconectado');
       setConnected(false);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Erro de conexão WebSocket:', error);
     });
 
     socket.on('new_message', (message: Message) => {
@@ -71,6 +80,7 @@ export function useWhatsAppSocket(sessionId: string | undefined) {
 
     return () => {
       if (socketRef.current) {
+        console.log(`📤 Desinscrevendo da sessão: ${sessionId}`);
         socketRef.current.emit('unsubscribe', { sessionId });
         socketRef.current.disconnect();
       }
