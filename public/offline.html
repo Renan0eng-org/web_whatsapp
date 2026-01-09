@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline - Ícarus</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0e1322;
+      color: #d1d5db;
+      font-family: 'Nunito', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background-color: #1a2238;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+
+    .card h1 {
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+
+    .card p {
+      font-size: 16px;
+      margin-bottom: 24px;
+      color: #9ca3af;
+    }
+
+    .btn {
+      background-color: #8dc63f;
+      color: #0e1322;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .btn:hover {
+      background-color: #7ab534;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Sem Conexão</h1>
+    <p>Você está offline no momento.<br>Tente recarregar a página quando estiver conectado.</p>
+    <button class="btn" onclick="window.location.replace('/admin')">Tentar Novamente</button>
+  </div>
+</body>
+</html>
