@@ -30,7 +30,7 @@ export function useWhatsAppSocket(sessionId: string | undefined) {
   useEffect(() => {
     if (!sessionId) return;
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://whatsapp.back.renannardi.com';
     
     console.log(`🔌 Conectando ao WebSocket: ${API_URL}/whatsapp`);
     console.log(`📱 Session ID: ${sessionId}`);
