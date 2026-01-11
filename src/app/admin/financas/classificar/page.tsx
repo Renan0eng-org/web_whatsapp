@@ -86,6 +86,7 @@ import {
     Zap
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { formatDateUTC } from '@/lib/date';
 
 const ICON_MAP = {
     Home,
@@ -500,7 +501,7 @@ export default function ClassificarPage() {
                                         })}
                                     </CardTitle>
                                     <CardDescription className="mt-2">
-                                        {new Date(currentTransaction.date).toLocaleDateString('pt-BR')}
+                                        {formatDateUTC(currentTransaction.date)}
                                     </CardDescription>
                                 </div>
                                 <Badge variant={currentTransaction.value > 0 ? 'default' : 'destructive'}>

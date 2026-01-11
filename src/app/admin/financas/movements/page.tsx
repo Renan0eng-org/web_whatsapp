@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCategories, getTransactions, unclassifyTransaction } from '@/services/financas.service';
+import { formatDateUTC } from '@/lib/date';
 import { ExpenseCategory, Transaction } from '@/types/financas.types';
 import { AlertCircle, ArrowLeft, Loader, RefreshCcw, Undo2 } from 'lucide-react';
 import Link from 'next/link';
@@ -249,7 +250,7 @@ export default function MovementsPage() {
                       {tx.category && <Badge variant="secondary">{tx.category.name}</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(tx.date).toLocaleDateString('pt-BR')} • ID: {tx.externalId || '—'}
+                      {formatDateUTC(tx.date)} • ID: {tx.externalId || '—'}
                     </p>
                     {tx.notes && (
                       <p className="text-xs text-muted-foreground">Notas: {tx.notes}</p>

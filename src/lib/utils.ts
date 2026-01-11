@@ -49,11 +49,11 @@ export function formatDate(date: string): string {
 
   // Caso seja dentro da mesma semana
   if (diffInDays < 7) {
-    return newData.toLocaleDateString("pt-BR", { weekday: "long" });
+    return newData.toLocaleDateString("pt-BR", { weekday: "long", timeZone: 'UTC' });
   }
 
   // Caso seja mais de uma semana atrás, mostrar a data no formato dd/mm/yyyy
-  return newData.toLocaleDateString("pt-BR");
+  return newData.toLocaleDateString("pt-BR", { timeZone: 'UTC' });
 }
 
 export function truncateText(text: string, maxLength: number) {

@@ -49,6 +49,7 @@ import {
     TrendingUp
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { formatDateUTC } from '@/lib/date';
 
 export default function EmprestimosPage() {
     const [loans, setLoans] = useState<Loan[]>([]);
@@ -420,7 +421,7 @@ export default function EmprestimosPage() {
                                             <div>
                                                 <p className="font-medium text-red-900">{loan.borrowerName}</p>
                                                 <p className="text-sm text-red-700">
-                                                    Vencido em {new Date(loan.dueDate).toLocaleDateString('pt-BR')}
+                                                    Vencido em {formatDateUTC(loan.dueDate)}
                                                 </p>
                                             </div>
                                             <p className="font-semibold text-red-800">
@@ -449,7 +450,7 @@ export default function EmprestimosPage() {
                                             <div>
                                                 <p className="font-medium">{loan.borrowerName}</p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {new Date(loan.dueDate).toLocaleDateString('pt-BR')}
+                                                    {formatDateUTC(loan.dueDate)}
                                                 </p>
                                             </div>
                                             <p className="font-semibold text-orange-600">
@@ -505,7 +506,7 @@ export default function EmprestimosPage() {
                                     <div>
                                         <CardTitle>{loan.borrowerName}</CardTitle>
                                         <CardDescription>
-                                            {new Date(loan.dueDate).toLocaleDateString('pt-BR')}
+                                            {formatDateUTC(loan.dueDate)}
                                         </CardDescription>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -540,7 +541,7 @@ export default function EmprestimosPage() {
                                 )}
                                 {loan.isPaid && loan.paidDate && (
                                     <div className="text-sm text-green-600">
-                                        Pago em {new Date(loan.paidDate).toLocaleDateString('pt-BR')}
+                                        Pago em {loan.paidDate ? formatDateUTC(loan.paidDate) : ''}
                                     </div>
                                 )}
                                 
@@ -555,7 +556,7 @@ export default function EmprestimosPage() {
                                                 <div key={payment.idPayment} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
                                                     <div className="flex-1">
                                                         <p className="text-xs text-gray-600">
-                                                            {new Date(payment.createdAt).toLocaleDateString('pt-BR')} às{' '}
+                                                            {formatDateUTC(payment.createdAt)} às{' '}
                                                             {new Date(payment.createdAt).toLocaleTimeString('pt-BR', { 
                                                                 hour: '2-digit', 
                                                                 minute: '2-digit' 

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { formatDateUTC } from '@/lib/date';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,7 +129,7 @@ export function WhatsAppConfigForm() {
                       </div>
                       <div className="flex items-center justify-between text-gray-600">
                         <span>Criado em:</span>
-                        <span>{new Date(config.createdAt).toLocaleDateString('pt-BR')}</span>
+                        <span>{formatDateUTC(config.createdAt)}</span>
                       </div>
                       {config.webhookUrl && (
                         <div className="flex items-center justify-between rounded bg-gray-50 p-2">

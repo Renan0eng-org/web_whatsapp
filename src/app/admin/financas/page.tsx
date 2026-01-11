@@ -7,6 +7,7 @@ import { getFinancialSummary, getTransactions } from '@/services/financas.servic
 import { FinancialSummary, Transaction } from '@/types/financas.types';
 import { AlertCircle, Loader, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { formatDateUTC } from '@/lib/date';
 import { useEffect, useState } from 'react';
 
 export default function FinancasPage() {
@@ -191,7 +192,7 @@ export default function FinancasPage() {
                       <div className="flex-1">
                         <p className="text-sm font-medium">{transaction.description}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(transaction.date).toLocaleDateString('pt-BR')}
+                          {formatDateUTC(transaction.date)}
                         </p>
                       </div>
                       <div className="text-right">
