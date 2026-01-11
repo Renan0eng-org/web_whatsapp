@@ -33,6 +33,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { formatDateUTC } from '@/lib/date';
 import {
     classifyTransaction,
     createCategory,
@@ -86,7 +87,6 @@ import {
     Zap
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { formatDateUTC } from '@/lib/date';
 
 const ICON_MAP = {
     Home,

@@ -1,12 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { formatDateUTC } from '@/lib/date';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWhatsAppConfig } from '@/hooks/use-whatsapp-config';
+import { formatDateUTC } from '@/lib/date';
 import { AlertCircle, Copy, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 

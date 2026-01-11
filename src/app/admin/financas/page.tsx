@@ -3,11 +3,11 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatDateUTC } from '@/lib/date';
 import { getFinancialSummary, getTransactions } from '@/services/financas.service';
 import { FinancialSummary, Transaction } from '@/types/financas.types';
 import { AlertCircle, Loader, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
-import { formatDateUTC } from '@/lib/date';
 import { useEffect, useState } from 'react';
 
 export default function FinancasPage() {

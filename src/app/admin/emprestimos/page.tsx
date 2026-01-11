@@ -25,6 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { formatDateUTC } from '@/lib/date';
 import {
     createLoanBatch,
     deleteLoan,
@@ -49,7 +50,6 @@ import {
     TrendingUp
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { formatDateUTC } from '@/lib/date';
 
 export default function EmprestimosPage() {
     const [loans, setLoans] = useState<Loan[]>([]);
