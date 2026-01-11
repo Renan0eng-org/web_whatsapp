@@ -1,13 +1,13 @@
 'use client'
 
-import WhatsAppPage from "./whatsapp/page"
+import FinancasPage from "./financas/page"
 
 
 export default function DashboardPage() {
 
   return (
     <div>
-          <WhatsAppPage />
+          <FinancasPage />
     </div>
   )
 }

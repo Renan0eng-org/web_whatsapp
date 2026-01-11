@@ -106,3 +106,11 @@ export async function getFinancialSummary(params?: {
   const response = await api.get('/financas/summary', { params });
   return response.data;
 }
+
+export async function getFinancialSeries(params: {
+  startDate: string;
+  endDate: string;
+}): Promise<Array<{ date: string; income: number; expenses: number; balance: number; unpaid: number }>> {
+  const response = await api.get('/financas/series', { params });
+  return response.data;
+}
