@@ -142,7 +142,7 @@ export default function ClassificarPage() {
     const [createLoan, setCreateLoan] = useState(false);
     const [borrowerName, setBorrowerName] = useState('');
     const [linkLoanPayments, setLinkLoanPayments] = useState(false);
-    const [linkedLoanIds, setLinkedLoanIds] = useState<string[]>([]);
+    const [loanPaymentAmounts, setLoanPaymentAmounts] = useState<{ [loanId: string]: string }>({});
     const [loanItems, setLoanItems] = useState<{ amount: string; dueDate: string; description: string; notes: string }[]>([{
         amount: '', dueDate: '', description: '', notes: ''
     }]);
@@ -206,7 +206,7 @@ export default function ClassificarPage() {
             setSelectedCategory('');
             setNotes('');
             setLinkLoanPayments(false);
-            setLinkedLoanIds([]);
+            setLoanPaymentAmounts({});
         } catch (error) {
             setMessage({
                 type: 'error',
@@ -243,8 +243,30 @@ export default function ClassificarPage() {
             }
         }
 
+        // Validar total de pagamentos de empréstimo
+        const totalLoanPayments = Object.values(loanPaymentAmounts)
+            .filter((v) => v)
+            .reduce((sum, v) => sum + parseFloat(v as string), 0);
+        
+        if (createLoan && totalLoanPayments > currentTransaction.value) {
+            setMessage({
+                type: 'error',
+                text: `Total alocado para empréstimos (${totalLoanPayments.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}) não pode ultrapassar o valor da movimentação (${currentTransaction.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})`,
+            });
+            return;
+        }
+
         try {
             setClassifying(true);
+            
+            // Preparar pagamentos de empréstimo
+            const loanPayments = Object.entries(loanPaymentAmounts)
+                .filter(([_, amount]) => amount && parseFloat(amount) > 0)
+                .map(([loanId, amount]) => ({
+                    loanId,
+                    amount: parseFloat(amount),
+                }));
+
             await classifyTransaction(
                 currentTransaction.idTransaction,
                 selectedCategory,
@@ -260,7 +282,7 @@ export default function ClassificarPage() {
                             description: i.description || undefined,
                             notes: i.notes || undefined,
                         })) : undefined,
-                    linkedLoanIds: linkedLoanIds.length > 0 ? linkedLoanIds : undefined,
+                    loanPayments: loanPayments.length > 0 ? loanPayments : undefined,
                 },
             );
 
@@ -280,7 +302,7 @@ export default function ClassificarPage() {
                 setNotes('');
                 setCreateLoan(false);
                 setBorrowerName('');
-                setLinkedLoanIds([]);
+                setLoanPaymentAmounts({});
                 setLoanItems([{ amount: '', dueDate: '', description: '', notes: '' }]);
             }
 
@@ -328,7 +350,7 @@ export default function ClassificarPage() {
                 setBorrowerName('');
                 setLoanItems([{ amount: '', dueDate: '', description: '', notes: '' }]);
                 setLinkLoanPayments(false);
-                setLinkedLoanIds([]);
+                setLoanPaymentAmounts({});
             }
 
             setIsDeleteDialogOpen(false);
@@ -345,7 +367,11 @@ export default function ClassificarPage() {
 
     const handleToggleLinkLoanPayments = async (checked: boolean) => {
         setLinkLoanPayments(checked);
-        if (checked && paidLoans.length === 0) {
+        if (!checked) {
+            // Limpar valores de pagamento quando desmarcar
+            setLoanPaymentAmounts({});
+        } else if (paidLoans.length === 0) {
+            // Carregar empréstimos pagos quando marcar
             try {
                 const loans = await getPaidLoans();
                 setPaidLoans(loans);
@@ -650,35 +676,105 @@ export default function ClassificarPage() {
                                     <span className="text-sm text-muted-foreground">Vincular empréstimos pagos a esta entrada</span>
                                 </div>
                                 {linkLoanPayments && paidLoans.length > 0 && (
-                                    <div className="space-y-2 p-4 border rounded-lg bg-blue-50">
-                                        <p className="text-xs text-muted-foreground">Selecione empréstimos pagos para linkar com esta entrada</p>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                                            {paidLoans.map((loan) => (
-                                                <label key={loan.idLoan} className="flex items-center gap-2 p-2 hover:bg-blue-100 rounded cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={linkedLoanIds.includes(loan.idLoan)}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setLinkedLoanIds([...linkedLoanIds, loan.idLoan]);
-                                                            } else {
-                                                                setLinkedLoanIds(linkedLoanIds.filter(id => id !== loan.idLoan));
-                                                            }
-                                                        }}
-                                                    />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium text-blue-900">{loan.borrowerName}</p>
-                                                        <p className="text-xs text-blue-700">
-                                                            {loan.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                        </p>
+                                    <div className="space-y-3 p-4 border rounded-lg bg-blue-50">
+                                        <p className="text-xs text-muted-foreground">Especifique quanto desta entrada vai para cada empréstimo</p>
+                                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                                            {paidLoans.map((loan) => {
+                                                const totalPaid = loan.totalPaid || 0;
+                                                const remainingBalance = loan.remainingBalance || loan.amount;
+                                                const percentPaid = ((totalPaid / loan.amount) * 100).toFixed(0);
+                                                
+                                                return (
+                                                <div key={loan.idLoan} className="p-3 bg-white rounded border space-y-3">
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium text-blue-900">{loan.borrowerName}</p>
+                                                            <div className="mt-2 space-y-1">
+                                                                <p className="text-xs text-gray-700">
+                                                                    <span className="font-medium">Total do empréstimo:</span> {loan.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                </p>
+                                                                {totalPaid > 0 && (
+                                                                    <p className="text-xs text-green-600">
+                                                                        <span className="font-medium">Já pago:</span> {totalPaid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ({percentPaid}%)
+                                                                    </p>
+                                                                )}
+                                                                {remainingBalance > 0 && (
+                                                                    <p className="text-xs text-orange-600">
+                                                                        <span className="font-medium">Falta pagar:</span> {remainingBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                    </p>
+                                                                )}
+                                                                {remainingBalance === 0 && (
+                                                                    <p className="text-xs text-green-700 font-medium">
+                                                                        ✓ Empréstimo totalmente pago
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            {/* Barra de progresso */}
+                                                            {totalPaid > 0 && (
+                                                                <div className="mt-2">
+                                                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                                                        <div
+                                                                            className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                                                                            style={{ width: `${percentPaid}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </label>
-                                            ))}
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Quanto será pago para este empréstimo?"
+                                                        value={loanPaymentAmounts[loan.idLoan] || ''}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value;
+                                                            setLoanPaymentAmounts({
+                                                                ...loanPaymentAmounts,
+                                                                [loan.idLoan]: value,
+                                                            });
+                                                        }}
+                                                        step="0.01"
+                                                        min="0"
+                                                        max={remainingBalance}
+                                                        className="w-full px-3 py-2 text-sm border rounded bg-white"
+                                                    />
+                                                </div>
+                                                );
+                                            })}
                                         </div>
-                                        {linkedLoanIds.length > 0 && (
-                                            <p className="text-xs text-blue-700 pt-2">
-                                                {linkedLoanIds.length} empréstimo(s) selecionado(s)
-                                            </p>
+                                        {Object.keys(loanPaymentAmounts).filter(k => loanPaymentAmounts[k]).length > 0 && (
+                                            <div className={`p-3 rounded ${
+                                                Object.values(loanPaymentAmounts)
+                                                    .filter((v) => v)
+                                                    .reduce((sum, v) => sum + parseFloat(v as string), 0) > currentTransaction.value
+                                                    ? 'bg-red-100 border border-red-300'
+                                                    : 'bg-blue-100 border border-blue-300'
+                                            }`}>
+                                                <div className="space-y-1">
+                                                    <p className={`text-xs font-medium ${
+                                                        Object.values(loanPaymentAmounts)
+                                                            .filter((v) => v)
+                                                            .reduce((sum, v) => sum + parseFloat(v as string), 0) > currentTransaction.value
+                                                            ? 'text-red-800'
+                                                            : 'text-blue-800'
+                                                    }`}>
+                                                        Total Alocado: {Object.values(loanPaymentAmounts)
+                                                            .filter((v) => v)
+                                                            .reduce((sum, v) => sum + parseFloat(v as string), 0)
+                                                            .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </p>
+                                                    <p className="text-xs text-gray-600">
+                                                        Disponível na Movimentação: {currentTransaction.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                    </p>
+                                                    {Object.values(loanPaymentAmounts)
+                                                        .filter((v) => v)
+                                                        .reduce((sum, v) => sum + parseFloat(v as string), 0) > currentTransaction.value && (
+                                                        <p className="text-xs text-red-700 font-medium">
+                                                            ⚠️ Total alocado excede o valor da movimentação!
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
                                 )}

@@ -61,6 +61,10 @@ export const data = {
           title: "Classificar Despesas",
           url: "/admin/financas/classificar",
         },
+        {
+          title: "Movimentações",
+          url: "/admin/financas/movements",
+        },
       ],
     },
   ],

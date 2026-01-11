@@ -31,6 +31,10 @@ export async function getTransactions(params?: {
   endDate?: string;
   categoryId?: string;
   isClassified?: boolean;
+  search?: string;
+  minValue?: number;
+  maxValue?: number;
+  type?: 'income' | 'expense' | 'all';
 }) {
   const response = await api.get('/financas/transactions', { params });
   return response.data;
@@ -50,11 +54,16 @@ export async function classifyTransaction(
   id: string,
   categoryId: string,
   notes?: string,
-  options?: { createLoan?: boolean; borrowerName?: string; loanItems?: Array<{ amount: number; dueDate: Date | string; description?: string; notes?: string }>; linkedLoanIds?: string[] },
+  options?: { 
+    createLoan?: boolean; 
+    borrowerName?: string; 
+    loanItems?: Array<{ amount: number; dueDate: Date | string; description?: string; notes?: string }>; 
+    loanPayments?: Array<{ loanId: string; amount: number; notes?: string }>;
+  },
 ) {
   const response = await api.put(
     `/financas/transactions/${id}/classify`,
-    { categoryId, notes, createLoan: options?.createLoan, borrowerName: options?.borrowerName, loanItems: options?.loanItems, linkedLoanIds: options?.linkedLoanIds },
+    { categoryId, notes, createLoan: options?.createLoan, borrowerName: options?.borrowerName, loanItems: options?.loanItems, loanPayments: options?.loanPayments },
   );
   return response.data;
 }
@@ -66,6 +75,11 @@ export async function getPaidLoans() {
 
 export async function deleteTransaction(id: string) {
   const response = await api.delete(`/financas/transactions/${id}`);
+  return response.data;
+}
+
+export async function unclassifyTransaction(id: string) {
+  const response = await api.put(`/financas/transactions/${id}/unclassify`, {});
   return response.data;
 }
 

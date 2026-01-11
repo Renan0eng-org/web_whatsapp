@@ -67,7 +67,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <img src="/logo.webp" alt="Logo" className="h-8 w-8" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">PVAI SEM DOR</span>
+                  <span className="truncate font-semibold">Meu APP</span>
                   {
                     user?.nivel_acesso.nome ? (
                       <span className="truncate text-xs">{user?.nivel_acesso.nome}</span>

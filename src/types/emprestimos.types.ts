@@ -1,4 +1,15 @@
-import { ExpenseCategory } from './financas.types';
+import { ExpenseCategory, Transaction } from './financas.types';
+
+export interface LoanPayment {
+  idPayment: string;
+  loanId: string;
+  transactionId: string;
+  transaction?: Transaction;
+  amount: number;
+  notes?: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
 
 export interface Loan {
   idLoan: string;
@@ -13,6 +24,9 @@ export interface Loan {
   isPaid: boolean;
   paidDate?: string | Date;
   notes?: string;
+  payments?: LoanPayment[];
+  totalPaid?: number;
+  remainingBalance?: number;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -24,4 +38,9 @@ export interface LoanSummary {
   paidLoans: number;
   overdueLoans: Loan[];
   upcomingPayments: Loan[];
+  overdueAmount?: number;
+  overdueCount?: number;
+  upcomingAmount7Days?: number;
+  unlinkedAmount?: number;
+  unlinkedCount?: number;
 }

@@ -300,7 +300,7 @@ export default function EmprestimosPage() {
 
             {summary && (
                 <>
-                    <div className="grid gap-4 grid-cols-1 md:grid-cols-4">
+                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Total Emprestado</CardTitle>
@@ -339,6 +339,24 @@ export default function EmprestimosPage() {
 
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Não Linkados</CardTitle>
+                                <DollarSign className="h-4 w-4 text-purple-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-purple-600">
+                                    {(summary.unlinkedAmount || 0).toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL',
+                                    })}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {summary.unlinkedCount || 0} empréstimo(s) sem link
+                                </p>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Total de Empréstimos</CardTitle>
                                 <DollarSign className="h-4 w-4 text-blue-600" />
                             </CardHeader>
@@ -363,6 +381,27 @@ export default function EmprestimosPage() {
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
                                     Cobranças próximas
+                                </p>
+                                <p className="text-xs text-red-700 font-semibold mt-1">
+                                    {(summary.upcomingAmount7Days || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Vencidos (Qtd / Valor)</CardTitle>
+                                <AlertCircle className="h-4 w-4 text-red-700" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-red-700">
+                                    {summary.overdueCount || 0}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Quantidade vencida
+                                </p>
+                                <p className="text-xs text-red-800 font-semibold mt-1">
+                                    {(summary.overdueAmount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </p>
                             </CardContent>
                         </Card>
@@ -504,6 +543,96 @@ export default function EmprestimosPage() {
                                         Pago em {new Date(loan.paidDate).toLocaleDateString('pt-BR')}
                                     </div>
                                 )}
+                                
+                                {/* Mostrar linkagens de pagamento apenas para empréstimos pagos */}
+                                {loan.isPaid && loan.payments && loan.payments.length > 0 && (
+                                    <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                        <p className="text-sm font-semibold text-blue-900 mb-2">
+                                            💰 Histórico de Pagamentos Recebidos
+                                        </p>
+                                        <div className="space-y-2">
+                                            {loan.payments.map((payment) => (
+                                                <div key={payment.idPayment} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
+                                                    <div className="flex-1">
+                                                        <p className="text-xs text-gray-600">
+                                                            {new Date(payment.createdAt).toLocaleDateString('pt-BR')} às{' '}
+                                                            {new Date(payment.createdAt).toLocaleTimeString('pt-BR', { 
+                                                                hour: '2-digit', 
+                                                                minute: '2-digit' 
+                                                            })}
+                                                        </p>
+                                                        {payment.transaction && (
+                                                            <p className="text-xs text-blue-700 mt-0.5">
+                                                                📝 {payment.transaction.description}
+                                                            </p>
+                                                        )}
+                                                        {payment.notes && (
+                                                            <p className="text-xs text-gray-500 mt-0.5 italic">
+                                                                {payment.notes}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-right ml-3">
+                                                        <p className="text-sm font-bold text-green-600">
+                                                            {payment.amount.toLocaleString('pt-BR', {
+                                                                style: 'currency',
+                                                                currency: 'BRL',
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="mt-3 pt-2 border-t border-blue-200">
+                                            {/* Barra de Progresso */}
+                                            <div className="mb-3">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-medium text-blue-800">Progresso de Recebimento</span>
+                                                    <span className="text-xs font-bold text-green-700">
+                                                        {((((loan.totalPaid || 0) / loan.amount) * 100)).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                                                    <div
+                                                        className="h-3 rounded-full transition-all duration-500 bg-gradient-to-r from-green-400 to-green-600"
+                                                        style={{ 
+                                                            width: `${Math.min(((loan.totalPaid || 0) / loan.amount) * 100, 100)}%` 
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-medium text-blue-800">Total Recebido:</span>
+                                                <span className="text-sm font-bold text-green-700">
+                                                    {(loan.totalPaid || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {loan.remainingBalance && loan.remainingBalance > 0 && (
+                                            <div className="mt-1 flex justify-between items-center">
+                                                <span className="text-xs font-medium text-orange-700">Saldo Pendente:</span>
+                                                <span className="text-sm font-bold text-orange-600">
+                                                    {loan.remainingBalance.toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {loan.remainingBalance === 0 && (
+                                            <div className="mt-2 text-center">
+                                                <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">
+                                                    ✅ Empréstimo Totalmente Quitado
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                
                                 <div className="flex gap-2 pt-2">
                                     {!loan.isPaid && (
                                         <>
@@ -552,7 +681,7 @@ export default function EmprestimosPage() {
 
             {/* Create Dialog */}
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogContent>
+                <DialogContent className='overflow-y-scroll h-5/6 scrollable'>
                     <DialogHeader>
                         <DialogTitle>Novo Empréstimo</DialogTitle>
                         <DialogDescription>
