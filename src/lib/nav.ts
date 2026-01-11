@@ -1,9 +1,10 @@
 import {
+  BadgeDollarSign,
   Home,
   MessagesSquare,
-  Shield
+  Shield,
+  Wallet
 } from "lucide-react";
-
 
 export const data = {
   user: {
@@ -27,13 +28,40 @@ export const data = {
       isActive: false,
       nivel_acesso: "acesso",
     },
-    // /admin/whatsapp
     {
       title: "WhatsApp",
       url: "/admin/whatsapp",
       icon: MessagesSquare,
       isActive: false,
       nivel_acesso: "",
+    },
+    {
+      title: "Empréstimos",
+      url: "/admin/emprestimos",
+      icon: BadgeDollarSign,
+      isActive: false,
+      nivel_acesso: "",
+    },
+    {
+      title: "Finanças",
+      url: "/admin/financas",
+      icon: Wallet,
+      isActive: false,
+      nivel_acesso: "",
+      items: [
+        {
+          title: "Categorias",
+          url: "/admin/financas/categorias",
+        },
+        {
+          title: "Importar Extrato",
+          url: "/admin/financas/importar",
+        },
+        {
+          title: "Classificar Despesas",
+          url: "/admin/financas/classificar",
+        },
+      ],
     },
   ],
   flow: [

@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WhatsAppConfigForm, WhatsAppMessenger, WhatsAppWebPanel, WhatsAppWebhookConfig } from '@/components/whatsapp';
 import { useWhatsAppConfig } from '@/hooks/use-whatsapp-config';
 import { useWhatsAppWeb } from '@/hooks/use-whatsapp-web';
-import { QrCode, Send, Settings, Webhook } from 'lucide-react';
+import { QrCode, Send, Webhook } from 'lucide-react';
 import { useState } from 'react';
 
 export default function WhatsAppPage() {
@@ -35,22 +35,22 @@ export default function WhatsAppPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="config">
-            <Settings className="mr-2 h-4 w-4" />
-            Configurações
+          <TabsTrigger value="web">
+            <QrCode className="mr-2 h-4 w-4" />
+            Web (QR Code)
           </TabsTrigger>
           <TabsTrigger value="messenger" disabled={!canSendMessages}>
             <Send className="mr-2 h-4 w-4" />
             Enviar Mensagens
           </TabsTrigger>
-          <TabsTrigger value="web">
-            <QrCode className="mr-2 h-4 w-4" />
-            Web (QR Code)
-          </TabsTrigger>
           <TabsTrigger value="webhook">
             <Webhook className="mr-2 h-4 w-4" />
             Webhook n8n
           </TabsTrigger>
+          {/* <TabsTrigger value="config">
+            <Settings className="mr-2 h-4 w-4" />
+            Configurações
+          </TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="config" className="mt-6">
