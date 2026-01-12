@@ -34,7 +34,7 @@ export default function WhatsAppPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-2">
           <TabsTrigger value="web">
             <QrCode className="mr-2 h-4 w-4" />
             Web (QR Code)
