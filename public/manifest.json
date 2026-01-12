@@ -1,7 +1,7 @@
 {
-  "name": "Ícarus - Controle de Produção Aquícola",
-  "short_name": "Ícarus",
-  "description": "Sistema de controle de produção para piscicultura",
+  "name": "Gestão",
+  "short_name": "Gestão",
+  "description": "Aplicativo de Gestão",
   "lang": "pt-BR",
   "start_url": "/admin",
   "display": "standalone",
