@@ -408,6 +408,43 @@ export default function EmprestimosPage() {
                         </Card>
                     </div>
 
+                    {/* Empréstimos por Categoria */}
+                    {summary.byCategory && Object.keys(summary.byCategory).length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Empréstimos por Categoria</CardTitle>
+                                <CardDescription>Valores pendentes agrupados por categoria</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    {Object.entries(summary.byCategory)
+                                        .sort(([, a], [, b]) => (b as number) - (a as number))
+                                        .map(([category, amount]) => (
+                                            <div key={category}>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className="text-sm font-medium">{category}</span>
+                                                    <span className="text-sm font-semibold">
+                                                        {(amount as number).toLocaleString('pt-BR', {
+                                                            style: 'currency',
+                                                            currency: 'BRL',
+                                                        })}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-muted rounded-full h-2">
+                                                    <div
+                                                        className="bg-primary h-2 rounded-full transition-all"
+                                                        style={{
+                                                            width: `${Math.min(((amount as number) / summary.totalLoaned) * 100, 100)}%`,
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {/* Overdue Loans */}
                     {summary && summary.overdueLoans && summary.overdueLoans.length > 0 && (
                         <Card className="border-red-400 bg-red-100">

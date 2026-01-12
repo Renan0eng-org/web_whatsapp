@@ -43,4 +43,5 @@ export interface LoanSummary {
   upcomingAmount7Days?: number;
   unlinkedAmount?: number;
   unlinkedCount?: number;
+  byCategory?: Record<string, number>;
 }

@@ -47,7 +47,7 @@ export default function FinancasPage() {
     }
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-2 sm:space-y-6 p-2 sm:p-6">
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Finanças</h1>
@@ -195,8 +195,8 @@ export default function FinancasPage() {
                                             className="flex items-center justify-between pb-4 border-b last:border-0"
                                         >
                                             <div className="flex-1">
-                                                <p className="text-sm font-medium">{transaction.description}</p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-[12px] ssm:text-sm font-medium">{transaction.description}</p>
+                                                <p className="text-[10px] ssm:text-xs text-muted-foreground">
                                                     {formatDateUTC(transaction.date)}
                                                 </p>
                                             </div>
