@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.renannardi.whatsapp.twa",
+        "sha256_cert_fingerprints": ["C8:ED:FE:CC:B4:1F:46:78:CE:19:D0:67:23:85:3B:C0:D3:33:97:F9:B5:B1:F9:2A:97:79:AF:1C:6F:D5:73:BD"]
+      }
+    }]
