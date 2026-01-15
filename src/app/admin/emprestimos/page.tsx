@@ -1,5 +1,7 @@
 'use client';
 
+import { LoanForm } from '@/components/LoanForm';
+import MonthlyEarningsChart from '@/components/MonthlyEarningsChart';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -22,18 +24,16 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { formatDateUTC } from '@/lib/date';
 import {
     createLoanBatch,
     deleteLoan,
+    getInterestEarnings,
     getLoans,
     getLoansSummary,
     markAsPaid,
     reversePayment,
-    updateLoan
+    updateLoan,
 } from '@/services/emprestimos.service';
 import { getCategories } from '@/services/financas.service';
 import { Loan, LoanSummary } from '@/types/emprestimos.types';
@@ -49,10 +49,11 @@ import {
     Trash2,
     TrendingUp
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 
 export default function EmprestimosPage() {
     const [loans, setLoans] = useState<Loan[]>([]);
+    const [isPending, startTransition] = useTransition();
     const [summary, setSummary] = useState<LoanSummary | null>(null);
     const [categories, setCategories] = useState<ExpenseCategory[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,11 +65,12 @@ export default function EmprestimosPage() {
     const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
     const [deletingLoanId, setDeletingLoanId] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [interestEarnings, setInterestEarnings] = useState<any>(null);
     const [newLoan, setNewLoan] = useState({
         borrowerName: '',
         items: [
-            { amount: '', categoryId: '', dueDate: '', description: '', notes: '' }
-        ] as { amount: string; categoryId: string; dueDate: string; description: string; notes: string }[],
+            { amount: '', categoryId: '', dueDate: '', description: '', notes: '', interestRate: '', interestType: 'SIMPLE', createdAt: '', periodRule: 'MENSAL', marketReference: '', expectedProfit: '', isRecurringInterest: false, recurringInterestDay: '1' }
+        ] as { amount: string; categoryId: string; dueDate: string; description: string; notes: string; interestRate: string; interestType: string; createdAt: string; periodRule: string; marketReference: string; expectedProfit: string; isRecurringInterest: boolean; recurringInterestDay: string }[],
         transactionId: '',
     });
 
@@ -79,14 +81,16 @@ export default function EmprestimosPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [loansData, summaryData, catData] = await Promise.all([
+            const [loansData, summaryData, catData, interestData] = await Promise.all([
                 getLoans(),
                 getLoansSummary(),
                 getCategories(),
+                getInterestEarnings(),
             ]);
             setLoans(loansData);
             setSummary(summaryData);
             setCategories(catData);
+            setInterestEarnings(interestData);
         } catch (error) {
             setMessage({
                 type: 'error',
@@ -97,15 +101,114 @@ export default function EmprestimosPage() {
         }
     };
 
+    // Calculate average interest rates
+    const calculateAverageRates = useCallback(() => {
+        const now = new Date();
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+        // Filter loans from last month
+        const lastMonthLoans = loans.filter(loan => {
+            const createdAt = new Date(loan.createdAt);
+            return createdAt >= lastMonth && loan.interestRate && loan.interestRate > 0;
+        });
+
+        // Filter loans from last year
+        const lastYearLoans = loans.filter(loan => {
+            const createdAt = new Date(loan.createdAt);
+            return createdAt >= lastYear && loan.interestRate && loan.interestRate > 0;
+        });
+
+        // Calculate weighted average for last month
+        let lastMonthTotalPrincipal = 0;
+        let lastMonthWeightedRate = 0;
+        lastMonthLoans.forEach(loan => {
+            const principal = loan.amount || 0;
+            const annualRate = loan.periodRule === 'MENSAL' ? (loan.interestRate || 0) * 12 : (loan.interestRate || 0);
+            lastMonthTotalPrincipal += principal;
+            lastMonthWeightedRate += annualRate * principal;
+        });
+
+        // Calculate weighted average for last year
+        let lastYearTotalPrincipal = 0;
+        let lastYearWeightedRate = 0;
+        lastYearLoans.forEach(loan => {
+            const principal = loan.amount || 0;
+            const annualRate = loan.periodRule === 'MENSAL' ? (loan.interestRate || 0) * 12 : (loan.interestRate || 0);
+            lastYearTotalPrincipal += principal;
+            lastYearWeightedRate += annualRate * principal;
+        });
+
+        return {
+            lastMonthAvg: lastMonthTotalPrincipal > 0 ? Math.round((lastMonthWeightedRate / lastMonthTotalPrincipal) * 100) / 100 : 0,
+            lastYearAvg: lastYearTotalPrincipal > 0 ? Math.round((lastYearWeightedRate / lastYearTotalPrincipal) * 100) / 100 : 0,
+            lastMonthCount: lastMonthLoans.length,
+            lastYearCount: lastYearLoans.length
+        };
+    }, [loans]);
+
+    const averageRates = useCallback(() => calculateAverageRates(), [calculateAverageRates])();
+
     const resetForm = () => {
         setNewLoan({
             borrowerName: '',
-            items: [{ amount: '', categoryId: '', dueDate: '', description: '', notes: '' }],
+            items: [{ amount: '', categoryId: '', dueDate: '', description: '', notes: '', interestRate: '', interestType: 'SIMPLE', createdAt: '', periodRule: 'MENSAL', marketReference: '', expectedProfit: '', isRecurringInterest: false, recurringInterestDay: '1' }],
             transactionId: '',
         });
     };
 
-    const handleCreateLoan = async () => {
+    const calculateMonthsDuration = (startDate: string, endDate: string): number => {
+        if (!startDate || !endDate) return 0;
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        let months = 0;
+        let currentDate = new Date(start);
+        
+        while (currentDate < end) {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            if (currentDate <= end) months++;
+        }
+        
+        if (months === 0) {
+            const days = Math.abs(Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+            return days / 30;
+        }
+        return Math.abs(months);
+    };
+
+    const calculateSimpleInterest = (principal: number, monthlyRate: number, months: number): number => {
+        return principal * (monthlyRate / 100) * months;
+    };
+
+    const calculateCompoundInterest = (principal: number, monthlyRate: number, months: number): number => {
+        const amount = principal * Math.pow(1 + monthlyRate / 100, months);
+        return amount - principal;
+    };
+
+    const calculateProfit = (idx: number) => {
+        const item = newLoan.items[idx];
+        if (!item.amount || !item.interestRate || !item.dueDate || !item.createdAt) return;
+
+        const principal = parseFloat(item.amount);
+        const annualRate = parseFloat(item.interestRate);
+        const months = calculateMonthsDuration(item.createdAt, item.dueDate);
+        
+        // Converter para taxa mensal
+        const monthlyRate = item.periodRule === 'ANUAL' ? annualRate / 12 : annualRate;
+        
+        let profit = 0;
+        if (item.interestType === 'SIMPLE') {
+            profit = calculateSimpleInterest(principal, monthlyRate, months);
+        } else {
+            profit = calculateCompoundInterest(principal, monthlyRate, months);
+        }
+        
+        const items = [...newLoan.items];
+        items[idx].expectedProfit = profit.toFixed(2);
+        setNewLoan({ ...newLoan, items });
+    };
+
+    const handleCreateLoan = useCallback(async () => {
         if (!newLoan.borrowerName || newLoan.items.length === 0) {
             setMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios' });
             return;
@@ -119,20 +222,35 @@ export default function EmprestimosPage() {
 
         try {
             setCreating(true);
+            // Transform data in non-blocking way
+            const itemsData = newLoan.items.map(i => ({
+                amount: parseFloat(i.amount),
+                categoryId: i.categoryId,
+                dueDate: new Date(i.dueDate),
+                description: i.description || undefined,
+                notes: i.notes || undefined,
+                interestRate: i.interestRate ? parseFloat(i.interestRate) : undefined,
+                interestType: i.interestRate ? i.interestType : undefined,
+                periodRule: i.interestRate ? i.periodRule : undefined,
+                marketReference: i.marketReference ? parseFloat(i.marketReference) : undefined,
+                expectedProfit: i.expectedProfit ? parseFloat(i.expectedProfit) : undefined,
+                isRecurringInterest: i.isRecurringInterest || false,
+                recurringInterestDay: i.recurringInterestDay ? parseInt(i.recurringInterestDay, 10) : undefined,
+                createdAt: i.createdAt ? new Date(i.createdAt) : undefined,
+            }));
+            
             await createLoanBatch({
                 borrowerName: newLoan.borrowerName,
                 transactionId: newLoan.transactionId || undefined,
-                items: newLoan.items.map(i => ({
-                    amount: parseFloat(i.amount),
-                    categoryId: i.categoryId,
-                    dueDate: new Date(i.dueDate),
-                    description: i.description || undefined,
-                    notes: i.notes || undefined,
-                })),
+                items: itemsData,
             });
-            await loadData();
-            setIsCreateDialogOpen(false);
-            resetForm();
+            startTransition(async () => {
+                await loadData();
+                startTransition(() => {
+                    setIsCreateDialogOpen(false);
+                    resetForm();
+                });
+            });
             setMessage({ type: 'success', text: 'Empréstimo criado com sucesso' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error: any) {
@@ -143,9 +261,9 @@ export default function EmprestimosPage() {
         } finally {
             setCreating(false);
         }
-    };
+    }, [newLoan, startTransition]);
 
-    const handleEditLoan = (loan: Loan) => {
+    const handleEditLoan = useCallback((loan: Loan) => {
         setEditingLoanId(loan.idLoan);
         setNewLoan({
             borrowerName: loan.borrowerName,
@@ -155,13 +273,21 @@ export default function EmprestimosPage() {
                 dueDate: new Date(loan.dueDate).toISOString().split('T')[0],
                 description: loan.description || '',
                 notes: loan.notes || '',
+                interestRate: loan.interestRate?.toString() || '',
+                interestType: loan.interestType || 'SIMPLE',
+                createdAt: new Date(loan.createdAt).toISOString().split('T')[0],
+                periodRule: loan.periodRule || 'MENSAL',
+                marketReference: loan.marketReference?.toString() || '',
+                expectedProfit: loan.expectedProfit?.toString() || '',
+                isRecurringInterest: loan.isRecurringInterest || false,
+                recurringInterestDay: loan.recurringInterestDay?.toString() || '1',
             }],
             transactionId: loan.transactionId || '',
         });
         setIsEditDialogOpen(true);
-    };
+    }, []);
 
-    const handleSaveEditLoan = async () => {
+    const handleSaveEditLoan = useCallback(async () => {
         if (!editingLoanId || !newLoan.borrowerName || newLoan.items.length === 0) {
             setMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios' });
             return;
@@ -174,19 +300,32 @@ export default function EmprestimosPage() {
 
         try {
             setCreating(true);
-            // For editing, we will update only the first item fields (single loan)
-            await updateLoan(editingLoanId, {
+            const loanUpdateData = {
                 borrowerName: newLoan.borrowerName,
                 amount: parseFloat(newLoan.items[0].amount),
                 categoryId: newLoan.items[0].categoryId,
                 dueDate: new Date(newLoan.items[0].dueDate),
                 description: newLoan.items[0].description || undefined,
                 notes: newLoan.items[0].notes || undefined,
+                interestRate: newLoan.items[0].interestRate ? parseFloat(newLoan.items[0].interestRate) : undefined,
+                interestType: newLoan.items[0].interestRate ? newLoan.items[0].interestType : undefined,
+                periodRule: newLoan.items[0].interestRate ? newLoan.items[0].periodRule : undefined,
+                marketReference: newLoan.items[0].marketReference ? parseFloat(newLoan.items[0].marketReference) : undefined,
+                expectedProfit: newLoan.items[0].expectedProfit ? parseFloat(newLoan.items[0].expectedProfit) : undefined,
+                isRecurringInterest: newLoan.items[0].isRecurringInterest || false,
+                recurringInterestDay: newLoan.items[0].recurringInterestDay ? parseInt(newLoan.items[0].recurringInterestDay, 10) : undefined,
+                createdAt: newLoan.items[0].createdAt ? new Date(newLoan.items[0].createdAt) : undefined,
+            };
+            // For editing, we will update only the first item fields (single loan)
+            await updateLoan(editingLoanId, loanUpdateData);
+            startTransition(async () => {
+                await loadData();
+                startTransition(() => {
+                    setIsEditDialogOpen(false);
+                    setEditingLoanId(null);
+                    resetForm();
+                });
             });
-            await loadData();
-            setIsEditDialogOpen(false);
-            setEditingLoanId(null);
-            resetForm();
             setMessage({ type: 'success', text: 'Empréstimo atualizado com sucesso' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error: any) {
@@ -197,13 +336,13 @@ export default function EmprestimosPage() {
         } finally {
             setCreating(false);
         }
-    };
+    }, [editingLoanId, newLoan, startTransition]);
 
-    const handleMarkAsPaid = async (id: string) => {
+    const handleMarkAsPaid = useCallback(async (id: string) => {
         try {
             setCreating(true);
             await markAsPaid(id);
-            await loadData();
+            startTransition(() => loadData());
             setMessage({ type: 'success', text: 'Empréstimo marcado como pago' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error: any) {
@@ -214,13 +353,13 @@ export default function EmprestimosPage() {
         } finally {
             setCreating(false);
         }
-    };
+    }, [startTransition]);
 
-    const handleReversePayment = async (id: string) => {
+    const handleReversePayment = useCallback(async (id: string) => {
         try {
             setCreating(true);
             await reversePayment(id);
-            await loadData();
+            startTransition(() => loadData());
             setMessage({ type: 'success', text: 'Pagamento estornado com sucesso' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error: any) {
@@ -231,22 +370,26 @@ export default function EmprestimosPage() {
         } finally {
             setCreating(false);
         }
-    };
+    }, [startTransition]);
 
-    const handleDeleteClick = (loanId: string) => {
+    const handleDeleteClick = useCallback((loanId: string) => {
         setDeletingLoanId(loanId);
         setIsDeleteDialogOpen(true);
-    };
+    }, []);
 
-    const handleConfirmDelete = async () => {
+    const handleConfirmDelete = useCallback(async () => {
         if (!deletingLoanId) return;
 
         try {
             setCreating(true);
             await deleteLoan(deletingLoanId);
-            await loadData();
-            setIsDeleteDialogOpen(false);
-            setDeletingLoanId(null);
+            startTransition(async () => {
+                await loadData();
+                startTransition(() => {
+                    setIsDeleteDialogOpen(false);
+                    setDeletingLoanId(null);
+                });
+            });
             setMessage({ type: 'success', text: 'Empréstimo deletado com sucesso' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error: any) {
@@ -257,7 +400,8 @@ export default function EmprestimosPage() {
         } finally {
             setCreating(false);
         }
-    };
+    }, [deletingLoanId, startTransition]);
+
 
     const filteredLoans = loans.filter((loan) => {
         if (filter === 'pending') return !loan.isPaid;
@@ -274,8 +418,8 @@ export default function EmprestimosPage() {
     }
 
     return (
-        <div className="space-y-6 p-6">
-            <div className="flex justify-between items-center">
+        <div className="sm:space-y-6 space-y-2 p-2 sm:p-6">
+            <div className="flex flex-wrap sm:space-y-6 space-y-2 justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Empréstimos</h1>
                     <p className="text-muted-foreground mt-2">
@@ -301,7 +445,7 @@ export default function EmprestimosPage() {
 
             {summary && (
                 <>
-                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid sm:gap-6 gap-2 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Total Emprestado</CardTitle>
@@ -407,6 +551,154 @@ export default function EmprestimosPage() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Rendimentos de Juros */}
+                    {interestEarnings && interestEarnings.totalInterest > 0 && (
+                        <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle>Rendimentos de Juros</CardTitle>
+                                    <CardDescription>Juros acumulados nos empréstimos</CardDescription>
+                                </div>
+                                <DollarSign className="h-6 w-6 text-emerald-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid sm:space-y-6 space-y-2 grid-cols-1 md:grid-cols-3">
+                                    <div>
+                                        <p className="text-sm text-muted-foreground mb-1">Principal Total</p>
+                                        <p className="text-2xl font-bold text-emerald-700">
+                                            {interestEarnings.totalPrincipal.toLocaleString('pt-BR', {
+                                                style: 'currency',
+                                                currency: 'BRL',
+                                            })}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground mb-1">Rendimento de Juros</p>
+                                        <p className="text-2xl font-bold text-teal-600">
+                                            {interestEarnings.totalInterest.toLocaleString('pt-BR', {
+                                                style: 'currency',
+                                                currency: 'BRL',
+                                            })}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground mb-1">Montante Total</p>
+                                        <p className="text-2xl font-bold text-emerald-600">
+                                            {interestEarnings.totalAmount.toLocaleString('pt-BR', {
+                                                style: 'currency',
+                                                currency: 'BRL',
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                {/* Taxas Médias */}
+                                <div className="mt-4 pt-4 border-t">
+                                    <p className="text-sm font-semibold mb-3">Taxas de Juros Médias</p>
+                                    <div className="grid gap-3 grid-cols-2">
+                                        <div className="bg-white p-3 rounded-lg">
+                                            <p className="text-xs text-gray-600">Último Mês</p>
+                                            <p className="text-lg font-semibold text-emerald-600">
+                                                {averageRates.lastMonthAvg > 0 ? `${averageRates.lastMonthAvg}% a.a.` : 'N/A'}
+                                            </p>
+                                            {averageRates.lastMonthAvg > 0 && (
+                                                <p className="text-sm text-emerald-500">
+                                                    {Math.round((averageRates.lastMonthAvg / 12) * 100) / 100}% a.m.
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-gray-500">
+                                                {averageRates.lastMonthCount} empréstimo(s)
+                                            </p>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-lg">
+                                            <p className="text-xs text-gray-600">Último Ano</p>
+                                            <p className="text-lg font-semibold text-teal-600">
+                                                {averageRates.lastYearAvg > 0 ? `${averageRates.lastYearAvg}% a.a.` : 'N/A'}
+                                            </p>
+                                            {averageRates.lastYearAvg > 0 && (
+                                                <p className="text-sm text-teal-500">
+                                                    {Math.round((averageRates.lastYearAvg / 12) * 100) / 100}% a.m.
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-gray-500">
+                                                {averageRates.lastYearCount} empréstimo(s)
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6">
+                                    <MonthlyEarningsChart loans={loans} months={9} />
+                                </div>
+                                {interestEarnings.byType.simple.interest > 0 || interestEarnings.byType.compound.interest > 0 ? (
+                                    <div className="mt-6 pt-4 border-t">
+                                        <p className="text-sm font-semibold mb-3">Detalhamento por Tipo</p>
+                                        <div className="grid gap-3 grid-cols-2">
+                                            {interestEarnings.byType.simple.interest > 0 && (
+                                                <div className="bg-white p-3 rounded-lg">
+                                                    <p className="text-xs text-gray-600">Juros Simples</p>
+                                                    <p className="text-lg font-semibold text-emerald-600">
+                                                        {interestEarnings.byType.simple.interest.toLocaleString('pt-BR', {
+                                                            style: 'currency',
+                                                            currency: 'BRL',
+                                                        })}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {interestEarnings.byType.compound.interest > 0 && (
+                                                <div className="bg-white p-3 rounded-lg">
+                                                    <p className="text-xs text-gray-600">Juros Compostos</p>
+                                                    <p className="text-lg font-semibold text-teal-600">
+                                                        {interestEarnings.byType.compound.interest.toLocaleString('pt-BR', {
+                                                            style: 'currency',
+                                                            currency: 'BRL',
+                                                        })}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {/* Juros Recorrentes */}
+                                {(interestEarnings.recurringInterestPaid > 0 || interestEarnings.recurringInterestPending > 0) && (
+                                    <div className="mt-6 pt-4 border-t">
+                                        <p className="text-sm font-semibold mb-3">💰 Juros Recorrentes (Mensais)</p>
+                                        <div className="grid gap-3 grid-cols-3">
+                                            <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                                                <p className="text-xs text-green-700">Recebido</p>
+                                                <p className="text-lg font-semibold text-green-600">
+                                                    {(interestEarnings.recurringInterestPaid || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </p>
+                                            </div>
+                                            <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                                                <p className="text-xs text-amber-700">Pendente</p>
+                                                <p className="text-lg font-semibold text-amber-600">
+                                                    {(interestEarnings.recurringInterestPending || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </p>
+                                            </div>
+                                            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                                                <p className="text-xs text-blue-700">Total</p>
+                                                <p className="text-lg font-semibold text-blue-600">
+                                                    {(interestEarnings.totalRecurringInterest || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Empréstimos por Categoria */}
                     {summary.byCategory && Object.keys(summary.byCategory).length > 0 && (
@@ -528,7 +820,7 @@ export default function EmprestimosPage() {
             </div>
 
             {/* Loans List */}
-            <div className="grid gap-4">
+            <div className="grid sm:space-y-6 space-y-2">
                 {filteredLoans.length === 0 ? (
                     <Card>
                         <CardContent className="pt-6 text-center text-muted-foreground">
@@ -546,24 +838,173 @@ export default function EmprestimosPage() {
                                             {formatDateUTC(loan.dueDate)}
                                         </CardDescription>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap justify-end">
                                         <Badge variant={loan.isPaid ? 'secondary' : 'default'}>
                                             {loan.isPaid ? 'Pago' : 'Pendente'}
                                         </Badge>
+                                        {loan.isRecurringInterest && (
+                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+                                                🔄 Juros Recorrentes
+                                            </Badge>
+                                        )}
                                         <Badge variant="outline">{loan.category?.name || 'Sem categoria'}</Badge>
                                     </div>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-muted-foreground">Valor:</span>
-                                    <span className="text-2xl font-bold">
-                                        {loan.amount.toLocaleString('pt-BR', {
-                                            style: 'currency',
-                                            currency: 'BRL',
-                                        })}
-                                    </span>
+                                {/* Informações Principais */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-gray-50 rounded-lg p-3">
+                                        <p className="text-xs text-muted-foreground">Valor Principal</p>
+                                        <p className="text-xl font-bold text-gray-900">
+                                            {loan.amount.toLocaleString('pt-BR', {
+                                                style: 'currency',
+                                                currency: 'BRL',
+                                            })}
+                                        </p>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg p-3">
+                                        <p className="text-xs text-muted-foreground">Taxa de Juros</p>
+                                        <p className="text-xl font-bold text-gray-900">
+                                            {loan.interestRate ? `${loan.interestRate}%` : '0%'}
+                                            <span className="text-xs font-normal text-muted-foreground ml-1">
+                                                {loan.periodRule === 'ANUAL' ? 'a.a.' : 'a.m.'}
+                                            </span>
+                                        </p>
+                                    </div>
                                 </div>
+
+                                {/* Rendimento e Total */}
+                                {loan.interestRate && loan.interestRate > 0 && (
+                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
+                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                            <div>
+                                                <p className="text-xs text-green-600">Rendimento</p>
+                                                <p className="font-bold text-green-700">
+                                                    {(() => {
+                                                        const principal = loan.amount || 0;
+                                                        const rate = loan.interestRate || 0;
+                                                        const periodRule = loan.periodRule || 'MENSAL';
+                                                        const interestType = loan.interestType || 'SIMPLE';
+                                                        const start = new Date(loan.createdAt);
+                                                        const end = loan.isPaid && loan.paidDate ? new Date(loan.paidDate) : new Date(loan.dueDate);
+                                                        
+                                                        let monthsDur = 0;
+                                                        let cur = new Date(start);
+                                                        while (cur < end) {
+                                                            cur.setMonth(cur.getMonth() + 1);
+                                                            if (cur <= end) monthsDur++;
+                                                        }
+                                                        if (monthsDur === 0) {
+                                                            const days = Math.abs(Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+                                                            monthsDur = days / 30;
+                                                        }
+
+                                                        const monthlyRate = periodRule === 'ANUAL' ? rate / 12 : rate;
+                                                        let profit = 0;
+                                                        if (interestType === 'SIMPLE') {
+                                                            profit = principal * (monthlyRate / 100) * monthsDur;
+                                                        } else {
+                                                            const amount = principal * Math.pow(1 + monthlyRate / 100, monthsDur);
+                                                            profit = amount - principal;
+                                                        }
+                                                        return profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                                                    })()}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-blue-600">Total a Receber</p>
+                                                <p className="font-bold text-blue-700">
+                                                    {(() => {
+                                                        const principal = loan.amount || 0;
+                                                        const rate = loan.interestRate || 0;
+                                                        const periodRule = loan.periodRule || 'MENSAL';
+                                                        const interestType = loan.interestType || 'SIMPLE';
+                                                        const start = new Date(loan.createdAt);
+                                                        const end = loan.isPaid && loan.paidDate ? new Date(loan.paidDate) : new Date(loan.dueDate);
+                                                        
+                                                        let monthsDur = 0;
+                                                        let cur = new Date(start);
+                                                        while (cur < end) {
+                                                            cur.setMonth(cur.getMonth() + 1);
+                                                            if (cur <= end) monthsDur++;
+                                                        }
+                                                        if (monthsDur === 0) {
+                                                            const days = Math.abs(Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+                                                            monthsDur = days / 30;
+                                                        }
+
+                                                        const monthlyRate = periodRule === 'ANUAL' ? rate / 12 : rate;
+                                                        let total = principal;
+                                                        if (interestType === 'SIMPLE') {
+                                                            total = principal + (principal * (monthlyRate / 100) * monthsDur);
+                                                        } else {
+                                                            total = principal * Math.pow(1 + monthlyRate / 100, monthsDur);
+                                                        }
+                                                        return total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                                                    })()}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-purple-600">Tipo</p>
+                                                <p className="font-bold text-purple-700 text-sm">
+                                                    {loan.interestType === 'COMPOUND' ? 'Composto' : 'Simples'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 pt-2 border-t border-green-200 flex justify-between text-xs text-gray-600">
+                                            <span>📅 Criado: {formatDateUTC(loan.createdAt)}</span>
+                                            <span>⏰ Duração: {(() => {
+                                                const start = new Date(loan.createdAt);
+                                                const end = loan.isPaid && loan.paidDate ? new Date(loan.paidDate) : new Date(loan.dueDate);
+                                                let months = 0;
+                                                let cur = new Date(start);
+                                                while (cur < end) {
+                                                    cur.setMonth(cur.getMonth() + 1);
+                                                    if (cur <= end) months++;
+                                                }
+                                                if (months === 0) {
+                                                    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                                                    return `${days} dias`;
+                                                }
+                                                return `${months} ${months === 1 ? 'mês' : 'meses'}`;
+                                            })()}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Juros Recorrentes Info */}
+                                {loan.isRecurringInterest && loan.interestRate && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium text-amber-800">Juros Recorrentes</span>
+                                            <span className="text-xs text-amber-600">
+                                                Dia {loan.recurringInterestDay || 1} de cada mês
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                            <div className="bg-white rounded p-2">
+                                                <p className="text-xs text-gray-500">Mensal</p>
+                                                <p className="font-bold text-amber-700">
+                                                    {(loan.amount * ((loan.periodRule === 'ANUAL' ? loan.interestRate / 12 : loan.interestRate) / 100)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </p>
+                                            </div>
+                                            <div className="bg-white rounded p-2">
+                                                <p className="text-xs text-gray-500">Recebido</p>
+                                                <p className="font-bold text-green-600">
+                                                    {(loan.recurringInterestPaid || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </p>
+                                            </div>
+                                            <div className="bg-white rounded p-2">
+                                                <p className="text-xs text-gray-500">Pendente</p>
+                                                <p className="font-bold text-red-600">
+                                                    {(loan.recurringInterestPending || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
                                 {loan.description && (
                                     <div>
                                         <p className="text-sm text-muted-foreground">Descrição:</p>
@@ -719,123 +1160,20 @@ export default function EmprestimosPage() {
 
             {/* Create Dialog */}
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogContent className='overflow-y-scroll h-5/6 scrollable'>
+                <DialogContent className='overflow-y-scroll h-5/6 p-2 sm:p-6 scrollable'>
                     <DialogHeader>
                         <DialogTitle>Novo Empréstimo</DialogTitle>
                         <DialogDescription>
                             Registre um novo empréstimo de dinheiro.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Nome de quem pediu emprestado *</label>
-                            <Input
-                                value={newLoan.borrowerName}
-                                onChange={(e) => setNewLoan({ ...newLoan, borrowerName: e.target.value })}
-                                placeholder="Ex: João Silva"
-                            />
-                        </div>
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium">Parcelas</label>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setNewLoan({
-                                        ...newLoan,
-                                        items: [...newLoan.items, { amount: '', categoryId: '', dueDate: '', description: '', notes: '' }]
-                                    })}
-                                >Adicionar parcela</Button>
-                            </div>
-
-                            {newLoan.items.map((item, idx) => (
-                                <div key={idx} className="grid md:grid-cols-2 gap-3 p-3 border rounded">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Valor *</label>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={item.amount}
-                                            onChange={(e) => {
-                                                const items = [...newLoan.items];
-                                                items[idx].amount = e.target.value;
-                                                setNewLoan({ ...newLoan, items });
-                                            }}
-                                            placeholder="0,00"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Categoria *</label>
-                                        <Select value={item.categoryId} onValueChange={(val) => {
-                                            const items = [...newLoan.items];
-                                            items[idx].categoryId = val;
-                                            setNewLoan({ ...newLoan, items });
-                                        }}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione uma categoria" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {categories.map((cat) => (
-                                                    <SelectItem key={cat.idCategory} value={cat.idCategory}>
-                                                        <div className="flex items-center gap-2">
-                                                            <span>{cat.name}</span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Data de Vencimento *</label>
-                                        <Input
-                                            type="date"
-                                            value={item.dueDate}
-                                            onChange={(e) => {
-                                                const items = [...newLoan.items];
-                                                items[idx].dueDate = e.target.value;
-                                                setNewLoan({ ...newLoan, items });
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Descrição (opcional)</label>
-                                        <Input
-                                            value={item.description}
-                                            onChange={(e) => {
-                                                const items = [...newLoan.items];
-                                                items[idx].description = e.target.value;
-                                                setNewLoan({ ...newLoan, items });
-                                            }}
-                                            placeholder="Motivo do empréstimo..."
-                                        />
-                                    </div>
-                                    <div className="space-y-2 md:col-span-2">
-                                        <label className="text-sm font-medium">Notas (opcional)</label>
-                                        <Textarea
-                                            value={item.notes}
-                                            onChange={(e) => {
-                                                const items = [...newLoan.items];
-                                                items[idx].notes = e.target.value;
-                                                setNewLoan({ ...newLoan, items });
-                                            }}
-                                            placeholder="Notas adicionais..."
-                                            rows={2}
-                                        />
-                                    </div>
-                                    <div className="flex justify-end md:col-span-2">
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => setNewLoan({
-                                                ...newLoan,
-                                                items: newLoan.items.filter((_, i) => i !== idx)
-                                            })}
-                                        >Remover</Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <LoanForm
+                        formData={newLoan}
+                        categories={categories}
+                        onFormChange={setNewLoan}
+                        onCalculateProfit={calculateProfit}
+                        mode="create"
+                    />
                     <DialogFooter>
                         <Button variant="outline" onClick={() => {
                             setIsCreateDialogOpen(false);
@@ -851,96 +1189,20 @@ export default function EmprestimosPage() {
 
             {/* Edit Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent>
+                <DialogContent className='overflow-y-scroll h-5/6 p-2 sm:p-6 scrollable'>
                     <DialogHeader>
                         <DialogTitle>Editar Empréstimo</DialogTitle>
                         <DialogDescription>
                             Atualize os detalhes do empréstimo.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Nome de quem pediu emprestado *</label>
-                            <Input
-                                value={newLoan.borrowerName}
-                                onChange={(e) => setNewLoan({ ...newLoan, borrowerName: e.target.value })}
-                                placeholder="Ex: João Silva"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Valor *</label>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                value={newLoan.items[0].amount}
-                                onChange={(e) => {
-                                    const items = [...newLoan.items];
-                                    items[0].amount = e.target.value;
-                                    setNewLoan({ ...newLoan, items });
-                                }}
-                                placeholder="0,00"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Categoria *</label>
-                            <Select value={newLoan.items[0].categoryId} onValueChange={(val) => {
-                                const items = [...newLoan.items];
-                                items[0].categoryId = val;
-                                setNewLoan({ ...newLoan, items });
-                            }}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione uma categoria" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {categories.map((cat) => (
-                                        <SelectItem key={cat.idCategory} value={cat.idCategory}>
-                                            <div className="flex items-center gap-2">
-                                                <span>{cat.name}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Data de Vencimento *</label>
-                            <Input
-                                type="date"
-                                value={newLoan.items[0].dueDate}
-                                onChange={(e) => {
-                                    const items = [...newLoan.items];
-                                    items[0].dueDate = e.target.value;
-                                    setNewLoan({ ...newLoan, items });
-                                }}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Descrição (opcional)</label>
-                            <Textarea
-                                value={newLoan.items[0].description}
-                                onChange={(e) => {
-                                    const items = [...newLoan.items];
-                                    items[0].description = e.target.value;
-                                    setNewLoan({ ...newLoan, items });
-                                }}
-                                placeholder="Motivo do empréstimo..."
-                                rows={2}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Notas (opcional)</label>
-                            <Textarea
-                                value={newLoan.items[0].notes}
-                                onChange={(e) => {
-                                    const items = [...newLoan.items];
-                                    items[0].notes = e.target.value;
-                                    setNewLoan({ ...newLoan, items });
-                                }}
-                                placeholder="Notas adicionais..."
-                                rows={2}
-                            />
-                        </div>
-                    </div>
+                    <LoanForm
+                        formData={newLoan}
+                        categories={categories}
+                        onFormChange={setNewLoan}
+                        onCalculateProfit={calculateProfit}
+                        mode="edit"
+                    />
                     <DialogFooter>
                         <Button variant="outline" onClick={() => {
                             setIsEditDialogOpen(false);
