@@ -184,12 +184,12 @@ export default function EmprestimosPage() {
         const end = new Date(endDate);
         let months = 0;
         let currentDate = new Date(start);
-        
+
         while (currentDate < end) {
             currentDate.setMonth(currentDate.getMonth() + 1);
             if (currentDate <= end) months++;
         }
-        
+
         if (months === 0) {
             const days = Math.abs(Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
             return days / 30;
@@ -213,17 +213,17 @@ export default function EmprestimosPage() {
         const principal = parseFloat(item.amount);
         const annualRate = parseFloat(item.interestRate);
         const months = calculateMonthsDuration(item.createdAt, item.dueDate);
-        
+
         // Converter para taxa mensal
         const monthlyRate = item.periodRule === 'ANUAL' ? annualRate / 12 : annualRate;
-        
+
         let profit = 0;
         if (item.interestType === 'SIMPLE') {
             profit = calculateSimpleInterest(principal, monthlyRate, months);
         } else {
             profit = calculateCompoundInterest(principal, monthlyRate, months);
         }
-        
+
         const items = [...newLoan.items];
         items[idx].expectedProfit = profit.toFixed(2);
         setNewLoan({ ...newLoan, items });
@@ -259,7 +259,7 @@ export default function EmprestimosPage() {
                 recurringInterestDay: i.recurringInterestDay ? parseInt(i.recurringInterestDay, 10) : undefined,
                 createdAt: i.createdAt ? new Date(i.createdAt) : undefined,
             }));
-            
+
             await createLoanBatch({
                 borrowerName: newLoan.borrowerName,
                 transactionId: newLoan.transactionId || undefined,
@@ -584,7 +584,7 @@ export default function EmprestimosPage() {
                         referenceMonth: refMonth,
                         paymentId: payment.idPayment,
                     });
-                } 
+                }
                 // Próximos: mês atual ou próximo e dentro dos próximos 7 dias
                 else if (dueDate >= now && dueDate <= next7Days) {
                     upcomingRecurring.push({
@@ -789,7 +789,7 @@ export default function EmprestimosPage() {
                                         </p>
                                     </div>
                                 </div>
-                                
+
                                 {/* Taxas Médias */}
                                 <div className="mt-4 pt-4 border-t">
                                     <p className="text-sm font-semibold mb-3">Taxas de Juros Médias</p>
@@ -860,7 +860,7 @@ export default function EmprestimosPage() {
 
                                 {/* Rendimento do Mês Atual */}
                                 {(interestEarnings.currentMonthRecurringInterest > 0 || interestEarnings.currentMonthNonRecurringInterest > 0) && (
-                                    <div className="mt-6 pt-4 border-t">
+                                    <div className="mt-6 pt-4 border-t gap-2 sm:gap-6">
                                         <p className="text-sm font-semibold mb-3">📊 Rendimento do Mês Atual</p>
                                         <div className="grid gap-3 grid-cols-2">
                                             <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg">
@@ -876,6 +876,15 @@ export default function EmprestimosPage() {
                                                 <p className="text-xs text-indigo-700">Rendimento Sem Recorrência</p>
                                                 <p className="text-lg font-semibold text-indigo-600">
                                                     {(interestEarnings.currentMonthNonRecurringInterest || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </p>
+                                            </div>
+                                            <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg col-span-2">
+                                                <p className="text-xs text-purple-700">Total Juros</p>
+                                                <p className="text-lg font-semibold text-purple-600">
+                                                    {(interestEarnings.currentMonthRecurringInterest + interestEarnings.currentMonthNonRecurringInterest).toLocaleString('pt-BR', {
                                                         style: 'currency',
                                                         currency: 'BRL',
                                                     })}
@@ -1155,7 +1164,7 @@ export default function EmprestimosPage() {
                                 </div>
 
                                 {/* Rendimento e Total */}
-                                {loan.interestRate && loan.interestRate > 0 && (
+                                {!!loan.interestRate && loan.interestRate > 0 && !!loan.expectedProfit && loan.expectedProfit > 0 && (
                                     <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
                                         <div className="grid grid-cols-3 gap-2 text-center">
                                             <div>
@@ -1168,7 +1177,7 @@ export default function EmprestimosPage() {
                                                         const interestType = loan.interestType || 'SIMPLE';
                                                         const start = new Date(loan.createdAt);
                                                         const end = loan.isPaid && loan.paidDate ? new Date(loan.paidDate) : new Date(loan.dueDate);
-                                                        
+
                                                         let monthsDur = 0;
                                                         let cur = new Date(start);
                                                         while (cur < end) {
@@ -1202,7 +1211,7 @@ export default function EmprestimosPage() {
                                                         const interestType = loan.interestType || 'SIMPLE';
                                                         const start = new Date(loan.createdAt);
                                                         const end = loan.isPaid && loan.paidDate ? new Date(loan.paidDate) : new Date(loan.dueDate);
-                                                        
+
                                                         let monthsDur = 0;
                                                         let cur = new Date(start);
                                                         while (cur < end) {
@@ -1252,7 +1261,7 @@ export default function EmprestimosPage() {
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {/* Juros Recorrentes Info */}
                                 {loan.isRecurringInterest && loan.interestRate && (
                                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -1300,7 +1309,7 @@ export default function EmprestimosPage() {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="flex-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-100"
+                                                className="flex-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-600"
                                                 disabled={processingRecurring === loan.idLoan}
                                                 onClick={() => handleGenerateRecurringInterest(loan.idLoan, 3)}
                                             >
@@ -1348,15 +1357,14 @@ export default function EmprestimosPage() {
                                                                             const isPastDue = refMonth < new Date() && !isCurrentMonth;
 
                                                                             return (
-                                                                                <div 
-                                                                                    key={payment.idPayment} 
-                                                                                    className={`flex items-center justify-between p-2 rounded border ${
-                                                                                        isPastDue 
-                                                                                            ? 'bg-red-50 border-red-300' 
-                                                                                            : isCurrentMonth 
-                                                                                                ? 'bg-yellow-50 border-yellow-300' 
+                                                                                <div
+                                                                                    key={payment.idPayment}
+                                                                                    className={`flex items-center justify-between p-2 rounded border ${isPastDue
+                                                                                            ? 'bg-red-50 border-red-300'
+                                                                                            : isCurrentMonth
+                                                                                                ? 'bg-yellow-50 border-yellow-300'
                                                                                                 : 'bg-white border-gray-200'
-                                                                                    }`}
+                                                                                        }`}
                                                                                 >
                                                                                     <div className="flex-1">
                                                                                         <div className="flex items-center gap-2">
@@ -1438,8 +1446,8 @@ export default function EmprestimosPage() {
                                                                             const monthName = refMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
                                                                             return (
-                                                                                <div 
-                                                                                    key={payment.idPayment} 
+                                                                                <div
+                                                                                    key={payment.idPayment}
                                                                                     className="flex items-center justify-between p-2 rounded border bg-green-50 border-green-200"
                                                                                 >
                                                                                     <div className="flex-1">
@@ -1531,7 +1539,7 @@ export default function EmprestimosPage() {
                                         )}
                                     </div>
                                 )}
-                                
+
                                 {loan.description && (
                                     <div>
                                         <p className="text-sm text-muted-foreground">Descrição:</p>
@@ -1549,7 +1557,7 @@ export default function EmprestimosPage() {
                                         Pago em {loan.paidDate ? formatDateUTC(loan.paidDate) : ''}
                                     </div>
                                 )}
-                                
+
                                 {/* Mostrar linkagens de pagamento apenas para empréstimos pagos */}
                                 {loan.isPaid && loan.payments && loan.payments.length > 0 && (
                                     <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -1562,9 +1570,9 @@ export default function EmprestimosPage() {
                                                     <div className="flex-1">
                                                         <p className="text-xs text-gray-600">
                                                             {formatDateUTC(payment.createdAt)} às{' '}
-                                                            {new Date(payment.createdAt).toLocaleTimeString('pt-BR', { 
-                                                                hour: '2-digit', 
-                                                                minute: '2-digit' 
+                                                            {new Date(payment.createdAt).toLocaleTimeString('pt-BR', {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
                                                             })}
                                                         </p>
                                                         {payment.transaction && (
@@ -1601,13 +1609,13 @@ export default function EmprestimosPage() {
                                                 <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
                                                     <div
                                                         className="h-3 rounded-full transition-all duration-500 bg-gradient-to-r from-green-400 to-green-600"
-                                                        style={{ 
-                                                            width: `${Math.min(((loan.totalPaid || 0) / loan.amount) * 100, 100)}%` 
+                                                        style={{
+                                                            width: `${Math.min(((loan.totalPaid || 0) / loan.amount) * 100, 100)}%`
                                                         }}
                                                     />
                                                 </div>
                                             </div>
-                                            
+
                                             <div className="flex justify-between items-center">
                                                 <span className="text-xs font-medium text-blue-800">Total Recebido:</span>
                                                 <span className="text-sm font-bold text-green-700">
@@ -1638,7 +1646,7 @@ export default function EmprestimosPage() {
                                         )}
                                     </div>
                                 )}
-                                
+
                                 <div className="flex gap-2 pt-2">
                                     {!loan.isPaid && (
                                         <>
@@ -1756,7 +1764,7 @@ export default function EmprestimosPage() {
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={handleConfirmDelete} 
+                            onClick={handleConfirmDelete}
                             disabled={creating}
                         >
                             {creating && <Loader className="h-4 w-4 mr-2 animate-spin" />}
@@ -1823,8 +1831,8 @@ export default function EmprestimosPage() {
                             setIsRecurringPaymentDialogOpen(false);
                             setEditingRecurringPayment(null);
                         }}>Cancelar</Button>
-                        <Button 
-                            onClick={handleSaveRecurringPayment} 
+                        <Button
+                            onClick={handleSaveRecurringPayment}
                             disabled={processingRecurring !== null}
                         >
                             {processingRecurring !== null && <Loader className="h-4 w-4 mr-2 animate-spin" />}
