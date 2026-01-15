@@ -87,3 +87,17 @@ export async function reverseRecurringInterestPayment(paymentId: string) {
   const response = await api.put(`/emprestimos/recurring-interest/${paymentId}/reverse`);
   return response.data;
 }
+
+export async function updateRecurringInterestPayment(paymentId: string, data: {
+  amount?: number;
+  referenceMonth?: Date;
+  notes?: string;
+}) {
+  const response = await api.put(`/emprestimos/recurring-interest/${paymentId}`, data);
+  return response.data;
+}
+
+export async function deleteRecurringInterestPayment(paymentId: string) {
+  const response = await api.delete(`/emprestimos/recurring-interest/${paymentId}`);
+  return response.data;
+}

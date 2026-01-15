@@ -24,32 +24,43 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { formatDateUTC } from '@/lib/date';
 import {
     createLoanBatch,
     deleteLoan,
+    deleteRecurringInterestPayment,
+    generateRecurringInterest,
     getInterestEarnings,
     getLoans,
     getLoansSummary,
     markAsPaid,
+    payRecurringInterest,
     reversePayment,
+    reverseRecurringInterestPayment,
     updateLoan,
+    updateRecurringInterestPayment,
 } from '@/services/emprestimos.service';
 import { getCategories } from '@/services/financas.service';
 import { Loan, LoanSummary } from '@/types/emprestimos.types';
 import { ExpenseCategory } from '@/types/financas.types';
 import {
     AlertCircle,
+    Calendar,
     Check,
     CheckCircle2,
     DollarSign,
     Edit,
+    Edit2,
     Loader,
     Plus,
+    RefreshCw,
     Trash2,
-    TrendingUp
+    TrendingUp,
+    Undo2
 } from 'lucide-react';
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 
 export default function EmprestimosPage() {
     const [loans, setLoans] = useState<Loan[]>([]);
@@ -66,6 +77,16 @@ export default function EmprestimosPage() {
     const [deletingLoanId, setDeletingLoanId] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [interestEarnings, setInterestEarnings] = useState<any>(null);
+    const [expandedRecurringLoan, setExpandedRecurringLoan] = useState<string | null>(null);
+    const [processingRecurring, setProcessingRecurring] = useState<string | null>(null);
+    const [editingRecurringPayment, setEditingRecurringPayment] = useState<{
+        idPayment: string;
+        loanId: string;
+        amount: string;
+        referenceMonth: string;
+        notes: string;
+    } | null>(null);
+    const [isRecurringPaymentDialogOpen, setIsRecurringPaymentDialogOpen] = useState(false);
     const [newLoan, setNewLoan] = useState({
         borrowerName: '',
         items: [
@@ -372,6 +393,118 @@ export default function EmprestimosPage() {
         }
     }, [startTransition]);
 
+    // ============ JUROS RECORRENTES HANDLERS ============
+
+    const handleGenerateRecurringInterest = useCallback(async (loanId: string, monthsAhead: number = 1) => {
+        try {
+            setProcessingRecurring(loanId);
+            await generateRecurringInterest(loanId, monthsAhead);
+            startTransition(() => loadData());
+            setMessage({ type: 'success', text: 'Parcelas de juros geradas com sucesso' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error: any) {
+            setMessage({
+                type: 'error',
+                text: error?.response?.data?.message || 'Erro ao gerar parcelas de juros',
+            });
+        } finally {
+            setProcessingRecurring(null);
+        }
+    }, [startTransition]);
+
+    const handlePayRecurringInterest = useCallback(async (loanId: string, referenceMonth: Date, amount?: number) => {
+        try {
+            setProcessingRecurring(loanId);
+            await payRecurringInterest({
+                loanId,
+                referenceMonth,
+                amount,
+            });
+            startTransition(() => loadData());
+            setMessage({ type: 'success', text: 'Juros recorrente pago com sucesso' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error: any) {
+            setMessage({
+                type: 'error',
+                text: error?.response?.data?.message || 'Erro ao pagar juros recorrente',
+            });
+        } finally {
+            setProcessingRecurring(null);
+        }
+    }, [startTransition]);
+
+    const handleReverseRecurringPayment = useCallback(async (paymentId: string, loanId: string) => {
+        try {
+            setProcessingRecurring(loanId);
+            await reverseRecurringInterestPayment(paymentId);
+            startTransition(() => loadData());
+            setMessage({ type: 'success', text: 'Pagamento de juros estornado com sucesso' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error: any) {
+            setMessage({
+                type: 'error',
+                text: error?.response?.data?.message || 'Erro ao estornar pagamento de juros',
+            });
+        } finally {
+            setProcessingRecurring(null);
+        }
+    }, [startTransition]);
+
+    const handleDeleteRecurringPayment = useCallback(async (paymentId: string, loanId: string) => {
+        try {
+            setProcessingRecurring(loanId);
+            await deleteRecurringInterestPayment(paymentId);
+            startTransition(() => loadData());
+            setMessage({ type: 'success', text: 'Parcela de juros excluída com sucesso' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error: any) {
+            setMessage({
+                type: 'error',
+                text: error?.response?.data?.message || 'Erro ao excluir parcela de juros',
+            });
+        } finally {
+            setProcessingRecurring(null);
+        }
+    }, [startTransition]);
+
+    const handleEditRecurringPayment = useCallback((payment: any, loanId: string) => {
+        const refMonth = new Date(payment.referenceMonth);
+        setEditingRecurringPayment({
+            idPayment: payment.idPayment,
+            loanId,
+            amount: payment.amount.toString(),
+            referenceMonth: `${refMonth.getFullYear()}-${String(refMonth.getMonth() + 1).padStart(2, '0')}`,
+            notes: payment.notes || '',
+        });
+        setIsRecurringPaymentDialogOpen(true);
+    }, []);
+
+    const handleSaveRecurringPayment = useCallback(async () => {
+        if (!editingRecurringPayment) return;
+
+        try {
+            setProcessingRecurring(editingRecurringPayment.loanId);
+            const [year, month] = editingRecurringPayment.referenceMonth.split('-').map(Number);
+            await updateRecurringInterestPayment(editingRecurringPayment.idPayment, {
+                amount: parseFloat(editingRecurringPayment.amount),
+                referenceMonth: new Date(year, month - 1, 1),
+                notes: editingRecurringPayment.notes || undefined,
+            });
+            startTransition(() => loadData());
+            setIsRecurringPaymentDialogOpen(false);
+            setEditingRecurringPayment(null);
+            setMessage({ type: 'success', text: 'Parcela de juros atualizada com sucesso' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (error: any) {
+            setMessage({
+                type: 'error',
+                text: error?.response?.data?.message || 'Erro ao atualizar parcela de juros',
+            });
+        } finally {
+            setProcessingRecurring(null);
+        }
+    }, [editingRecurringPayment, startTransition]);
+
     const handleDeleteClick = useCallback((loanId: string) => {
         setDeletingLoanId(loanId);
         setIsDeleteDialogOpen(true);
@@ -408,6 +541,70 @@ export default function EmprestimosPage() {
         if (filter === 'paid') return loan.isPaid;
         return true;
     });
+
+    // Calcular juros recorrentes vencidos e próximos
+    const recurringInterestData = useMemo(() => {
+        const now = new Date();
+        const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const next7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        const overdueRecurring: Array<{
+            loanId: string;
+            borrowerName: string;
+            amount: number;
+            referenceMonth: Date;
+            paymentId: string;
+        }> = [];
+
+        const upcomingRecurring: Array<{
+            loanId: string;
+            borrowerName: string;
+            amount: number;
+            referenceMonth: Date;
+            dueDay: number;
+            paymentId: string;
+        }> = [];
+
+        for (const loan of loans) {
+            if (!loan.recurringPayments || loan.isPaid) continue;
+
+            for (const payment of loan.recurringPayments) {
+                if (payment.isPaid) continue;
+
+                const refMonth = new Date(payment.referenceMonth);
+                const dueDay = loan.recurringInterestDay || 1;
+                const dueDate = new Date(refMonth.getFullYear(), refMonth.getMonth(), dueDay);
+
+                // Vencidos: meses anteriores ao atual OU mês atual mas dia já passou
+                if (refMonth < currentMonth || (refMonth.getMonth() === now.getMonth() && refMonth.getFullYear() === now.getFullYear() && dueDay < now.getDate())) {
+                    overdueRecurring.push({
+                        loanId: loan.idLoan,
+                        borrowerName: loan.borrowerName,
+                        amount: payment.amount,
+                        referenceMonth: refMonth,
+                        paymentId: payment.idPayment,
+                    });
+                } 
+                // Próximos: mês atual ou próximo e dentro dos próximos 7 dias
+                else if (dueDate >= now && dueDate <= next7Days) {
+                    upcomingRecurring.push({
+                        loanId: loan.idLoan,
+                        borrowerName: loan.borrowerName,
+                        amount: payment.amount,
+                        referenceMonth: refMonth,
+                        dueDay,
+                        paymentId: payment.idPayment,
+                    });
+                }
+            }
+        }
+
+        // Ordenar por data
+        overdueRecurring.sort((a, b) => a.referenceMonth.getTime() - b.referenceMonth.getTime());
+        upcomingRecurring.sort((a, b) => a.referenceMonth.getTime() - b.referenceMonth.getTime());
+
+        return { overdueRecurring, upcomingRecurring };
+    }, [loans]);
 
     if (loading) {
         return (
@@ -661,10 +858,37 @@ export default function EmprestimosPage() {
                                     </div>
                                 ) : null}
 
+                                {/* Rendimento do Mês Atual */}
+                                {(interestEarnings.currentMonthRecurringInterest > 0 || interestEarnings.currentMonthNonRecurringInterest > 0) && (
+                                    <div className="mt-6 pt-4 border-t">
+                                        <p className="text-sm font-semibold mb-3">📊 Rendimento do Mês Atual</p>
+                                        <div className="grid gap-3 grid-cols-2">
+                                            <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg">
+                                                <p className="text-xs text-purple-700">Juros Recorrentes</p>
+                                                <p className="text-lg font-semibold text-purple-600">
+                                                    {(interestEarnings.currentMonthRecurringInterest || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </p>
+                                            </div>
+                                            <div className="bg-indigo-50 border border-indigo-200 p-3 rounded-lg">
+                                                <p className="text-xs text-indigo-700">Rendimento Sem Recorrência</p>
+                                                <p className="text-lg font-semibold text-indigo-600">
+                                                    {(interestEarnings.currentMonthNonRecurringInterest || 0).toLocaleString('pt-BR', {
+                                                        style: 'currency',
+                                                        currency: 'BRL',
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Juros Recorrentes */}
                                 {(interestEarnings.recurringInterestPaid > 0 || interestEarnings.recurringInterestPending > 0) && (
                                     <div className="mt-6 pt-4 border-t">
-                                        <p className="text-sm font-semibold mb-3">💰 Juros Recorrentes (Mensais)</p>
+                                        <p className="text-sm font-semibold mb-3">💰 Juros Recorrentes (Total)</p>
                                         <div className="grid gap-3 grid-cols-3">
                                             <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
                                                 <p className="text-xs text-green-700">Recebido</p>
@@ -738,14 +962,14 @@ export default function EmprestimosPage() {
                     )}
 
                     {/* Overdue Loans */}
-                    {summary && summary.overdueLoans && summary.overdueLoans.length > 0 && (
+                    {((summary && summary.overdueLoans && summary.overdueLoans.length > 0) || recurringInterestData.overdueRecurring.length > 0) && (
                         <Card className="border-red-400 bg-red-100">
                             <CardHeader>
                                 <CardTitle className="text-red-800">⚠️ Empréstimos Vencidos</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2">
-                                    {summary.overdueLoans.map((loan: Loan) => (
+                                    {summary?.overdueLoans?.map((loan: Loan) => (
                                         <div key={loan.idLoan} className="flex items-center justify-between pb-2 border-b border-red-300 last:border-0">
                                             <div>
                                                 <p className="font-medium text-red-900">{loan.borrowerName}</p>
@@ -761,13 +985,41 @@ export default function EmprestimosPage() {
                                             </p>
                                         </div>
                                     ))}
+                                    {recurringInterestData.overdueRecurring.length > 0 && (
+                                        <>
+                                            {summary?.overdueLoans?.length > 0 && (
+                                                <div className="border-t border-red-300 pt-2 mt-2">
+                                                    <p className="text-xs font-semibold text-red-700 mb-2">📅 Juros Recorrentes Atrasados</p>
+                                                </div>
+                                            )}
+                                            {!summary?.overdueLoans?.length && (
+                                                <p className="text-xs font-semibold text-red-700 mb-2">📅 Juros Recorrentes Atrasados</p>
+                                            )}
+                                            {recurringInterestData.overdueRecurring.map((item) => (
+                                                <div key={item.paymentId} className="flex items-center justify-between pb-2 border-b border-red-300 last:border-0">
+                                                    <div>
+                                                        <p className="font-medium text-red-900">{item.borrowerName}</p>
+                                                        <p className="text-sm text-red-700">
+                                                            Ref: {item.referenceMonth.getMonth() + 1}/{item.referenceMonth.getFullYear()}
+                                                        </p>
+                                                    </div>
+                                                    <p className="font-semibold text-red-800">
+                                                        {item.amount.toLocaleString('pt-BR', {
+                                                            style: 'currency',
+                                                            currency: 'BRL',
+                                                        })}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
                     )}
 
                     {/* Upcoming Payments */}
-                    {summary.upcomingPayments.length > 0 && (
+                    {(summary.upcomingPayments.length > 0 || recurringInterestData.upcomingRecurring.length > 0) && (
                         <Card className="border-red-200 bg-red-50">
                             <CardHeader>
                                 <CardTitle>Cobranças Próximas</CardTitle>
@@ -790,6 +1042,34 @@ export default function EmprestimosPage() {
                                             </p>
                                         </div>
                                     ))}
+                                    {recurringInterestData.upcomingRecurring.length > 0 && (
+                                        <>
+                                            {summary.upcomingPayments.length > 0 && (
+                                                <div className="border-t pt-2 mt-2">
+                                                    <p className="text-xs font-semibold text-orange-700 mb-2">📅 Juros Recorrentes Próximos</p>
+                                                </div>
+                                            )}
+                                            {summary.upcomingPayments.length === 0 && (
+                                                <p className="text-xs font-semibold text-orange-700 mb-2">📅 Juros Recorrentes Próximos</p>
+                                            )}
+                                            {recurringInterestData.upcomingRecurring.map((item) => (
+                                                <div key={item.paymentId} className="flex items-center justify-between pb-2 border-b last:border-0">
+                                                    <div>
+                                                        <p className="font-medium">{item.borrowerName}</p>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Dia {item.dueDay} - Ref: {item.referenceMonth.getMonth() + 1}/{item.referenceMonth.getFullYear()}
+                                                        </p>
+                                                    </div>
+                                                    <p className="font-semibold text-orange-600">
+                                                        {item.amount.toLocaleString('pt-BR', {
+                                                            style: 'currency',
+                                                            currency: 'BRL',
+                                                        })}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
@@ -977,10 +1257,22 @@ export default function EmprestimosPage() {
                                 {loan.isRecurringInterest && loan.interestRate && (
                                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-amber-800">Juros Recorrentes</span>
-                                            <span className="text-xs text-amber-600">
-                                                Dia {loan.recurringInterestDay || 1} de cada mês
-                                            </span>
+                                            <span className="text-sm font-medium text-amber-800">💰 Juros Recorrentes</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-amber-600">
+                                                    Dia {loan.recurringInterestDay || 1} de cada mês
+                                                </span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 hover:bg-amber-100 text-amber-700 border-amber-700 hover:border-amber-800"
+                                                    onClick={() => setExpandedRecurringLoan(
+                                                        expandedRecurringLoan === loan.idLoan ? null : loan.idLoan
+                                                    )}
+                                                >
+                                                    <Calendar className="h-4 w-4 text-amber-700" />
+                                                </Button>
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-3 gap-2 text-center">
                                             <div className="bg-white rounded p-2">
@@ -1002,6 +1294,241 @@ export default function EmprestimosPage() {
                                                 </p>
                                             </div>
                                         </div>
+
+                                        {/* Botões de Ação Rápida */}
+                                        <div className="mt-3 flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-100"
+                                                disabled={processingRecurring === loan.idLoan}
+                                                onClick={() => handleGenerateRecurringInterest(loan.idLoan, 3)}
+                                            >
+                                                {processingRecurring === loan.idLoan ? (
+                                                    <Loader className="h-3 w-3 animate-spin mr-1" />
+                                                ) : (
+                                                    <RefreshCw className="h-3 w-3 mr-1" />
+                                                )}
+                                                Gerar Próx. 3 Meses
+                                            </Button>
+                                        </div>
+
+                                        {/* Seção Expandida - Lista de Parcelas */}
+                                        {expandedRecurringLoan === loan.idLoan && (
+                                            <div className="mt-4 pt-3 border-t border-amber-200">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <p className="text-sm font-semibold text-amber-800">📅 Parcelas de Juros</p>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-xs h-7 border-green-300 text-green-700 hover:bg-green-100"
+                                                        disabled={processingRecurring === loan.idLoan}
+                                                        onClick={() => handleGenerateRecurringInterest(loan.idLoan, 6)}
+                                                    >
+                                                        <Plus className="h-3 w-3 mr-1" />
+                                                        Gerar 6 Meses
+                                                    </Button>
+                                                </div>
+
+                                                {/* Lista de Parcelas */}
+                                                {loan.recurringPayments && loan.recurringPayments.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {/* Pendentes primeiro */}
+                                                        {loan.recurringPayments.filter(p => !p.isPaid).length > 0 && (
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-red-700 mb-2">⏳ Pendentes</p>
+                                                                <div className="space-y-2 max-h-48 overflow-y-auto scrollable">
+                                                                    {[...loan.recurringPayments]
+                                                                        .filter(p => !p.isPaid)
+                                                                        .sort((a, b) => new Date(a.referenceMonth).getTime() - new Date(b.referenceMonth).getTime())
+                                                                        .map((payment) => {
+                                                                            const refMonth = new Date(payment.referenceMonth);
+                                                                            const monthName = refMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                                                                            const isCurrentMonth = refMonth.getMonth() === new Date().getMonth() && refMonth.getFullYear() === new Date().getFullYear();
+                                                                            const isPastDue = refMonth < new Date() && !isCurrentMonth;
+
+                                                                            return (
+                                                                                <div 
+                                                                                    key={payment.idPayment} 
+                                                                                    className={`flex items-center justify-between p-2 rounded border ${
+                                                                                        isPastDue 
+                                                                                            ? 'bg-red-50 border-red-300' 
+                                                                                            : isCurrentMonth 
+                                                                                                ? 'bg-yellow-50 border-yellow-300' 
+                                                                                                : 'bg-white border-gray-200'
+                                                                                    }`}
+                                                                                >
+                                                                                    <div className="flex-1">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <p className="text-sm font-medium capitalize">
+                                                                                                {monthName}
+                                                                                            </p>
+                                                                                            {isCurrentMonth && (
+                                                                                                <Badge variant="outline" className="text-xs bg-yellow-100 border-yellow-400 text-yellow-800">
+                                                                                                    Mês Atual
+                                                                                                </Badge>
+                                                                                            )}
+                                                                                            {isPastDue && (
+                                                                                                <Badge variant="outline" className="text-xs bg-red-100 border-red-400 text-red-700">
+                                                                                                    Atrasado
+                                                                                                </Badge>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1">
+                                                                                        <p className="text-sm font-bold text-amber-700 mr-2">
+                                                                                            {payment.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                        </p>
+                                                                                        <Button
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            className="h-7 w-7 p-0 border-green-300 text-green-700 hover:bg-green-100"
+                                                                                            disabled={processingRecurring === loan.idLoan}
+                                                                                            onClick={() => handlePayRecurringInterest(loan.idLoan, new Date(payment.referenceMonth), payment.amount)}
+                                                                                            title="Marcar como pago"
+                                                                                        >
+                                                                                            {processingRecurring === loan.idLoan ? (
+                                                                                                <Loader className="h-3 w-3 animate-spin" />
+                                                                                            ) : (
+                                                                                                <Check className="h-3 w-3" />
+                                                                                            )}
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="sm"
+                                                                                            className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                                                                                            disabled={processingRecurring === loan.idLoan}
+                                                                                            onClick={() => handleEditRecurringPayment(payment, loan.idLoan)}
+                                                                                            title="Editar parcela"
+                                                                                        >
+                                                                                            <Edit2 className="h-3 w-3" />
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="sm"
+                                                                                            className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                                                                            disabled={processingRecurring === loan.idLoan}
+                                                                                            onClick={() => handleDeleteRecurringPayment(payment.idPayment, loan.idLoan)}
+                                                                                            title="Excluir parcela"
+                                                                                        >
+                                                                                            {processingRecurring === loan.idLoan ? (
+                                                                                                <Loader className="h-3 w-3 animate-spin" />
+                                                                                            ) : (
+                                                                                                <Trash2 className="h-3 w-3" />
+                                                                                            )}
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Pagas */}
+                                                        {loan.recurringPayments.filter(p => p.isPaid).length > 0 && (
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-green-700 mb-2">✅ Pagas</p>
+                                                                <div className="space-y-2 max-h-48 overflow-y-auto scrollable">
+                                                                    {[...loan.recurringPayments]
+                                                                        .filter(p => p.isPaid)
+                                                                        .sort((a, b) => new Date(b.referenceMonth).getTime() - new Date(a.referenceMonth).getTime())
+                                                                        .map((payment) => {
+                                                                            const refMonth = new Date(payment.referenceMonth);
+                                                                            const monthName = refMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+                                                                            return (
+                                                                                <div 
+                                                                                    key={payment.idPayment} 
+                                                                                    className="flex items-center justify-between p-2 rounded border bg-green-50 border-green-200"
+                                                                                >
+                                                                                    <div className="flex-1">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <p className="text-sm font-medium capitalize text-green-800">
+                                                                                                {monthName}
+                                                                                            </p>
+                                                                                            <Badge variant="outline" className="text-xs bg-green-100 border-green-400 text-green-700">
+                                                                                                <Check className="h-3 w-3 mr-1" />
+                                                                                                Pago
+                                                                                            </Badge>
+                                                                                        </div>
+                                                                                        {payment.paidDate && (
+                                                                                            <p className="text-xs text-gray-500">
+                                                                                                Pago em {formatDateUTC(payment.paidDate)}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1">
+                                                                                        <p className="text-sm font-bold text-green-600 mr-2">
+                                                                                            {payment.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                        </p>
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="sm"
+                                                                                            className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                                                                                            disabled={processingRecurring === loan.idLoan}
+                                                                                            onClick={() => handleEditRecurringPayment(payment, loan.idLoan)}
+                                                                                            title="Editar parcela"
+                                                                                        >
+                                                                                            <Edit2 className="h-3 w-3" />
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="sm"
+                                                                                            className="h-7 w-7 p-0 text-gray-400 hover:text-amber-600 hover:bg-amber-50"
+                                                                                            disabled={processingRecurring === loan.idLoan}
+                                                                                            onClick={() => handleReverseRecurringPayment(payment.idPayment, loan.idLoan)}
+                                                                                            title="Estornar pagamento"
+                                                                                        >
+                                                                                            {processingRecurring === loan.idLoan ? (
+                                                                                                <Loader className="h-3 w-3 animate-spin" />
+                                                                                            ) : (
+                                                                                                <Undo2 className="h-3 w-3" />
+                                                                                            )}
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-4">
+                                                        <p className="text-sm text-gray-500 mb-2">Nenhuma parcela gerada ainda</p>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-xs border-amber-300 text-amber-700 hover:bg-amber-100"
+                                                            disabled={processingRecurring === loan.idLoan}
+                                                            onClick={() => handleGenerateRecurringInterest(loan.idLoan, 3)}
+                                                        >
+                                                            {processingRecurring === loan.idLoan ? (
+                                                                <Loader className="h-3 w-3 animate-spin mr-1" />
+                                                            ) : (
+                                                                <Plus className="h-3 w-3 mr-1" />
+                                                            )}
+                                                            Gerar Parcelas
+                                                        </Button>
+                                                    </div>
+                                                )}
+
+                                                {/* Resumo de Parcelas */}
+                                                {loan.recurringPayments && loan.recurringPayments.length > 0 && (
+                                                    <div className="mt-3 pt-2 border-t border-amber-200 grid grid-cols-2 gap-2 text-xs">
+                                                        <div className="text-gray-600">
+                                                            Total de Parcelas: <span className="font-bold">{loan.recurringPayments.length}</span>
+                                                        </div>
+                                                        <div className="text-gray-600 text-right">
+                                                            Pagas: <span className="font-bold text-green-600">{loan.recurringPayments.filter(p => p.isPaid).length}</span>
+                                                            {' / '}
+                                                            Pendentes: <span className="font-bold text-red-600">{loan.recurringPayments.filter(p => !p.isPaid).length}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 
@@ -1238,6 +1765,74 @@ export default function EmprestimosPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Dialog para Editar Parcela de Juros Recorrentes */}
+            <Dialog open={isRecurringPaymentDialogOpen} onOpenChange={setIsRecurringPaymentDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Editar Parcela de Juros</DialogTitle>
+                        <DialogDescription>
+                            Atualize os detalhes da parcela de juros recorrentes.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {editingRecurringPayment && (
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="recurring-amount">Valor</Label>
+                                <Input
+                                    id="recurring-amount"
+                                    type="number"
+                                    step="0.01"
+                                    value={editingRecurringPayment.amount}
+                                    onChange={(e) => setEditingRecurringPayment({
+                                        ...editingRecurringPayment,
+                                        amount: e.target.value,
+                                    })}
+                                    placeholder="0,00"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="recurring-month">Mês de Referência</Label>
+                                <Input
+                                    id="recurring-month"
+                                    type="month"
+                                    value={editingRecurringPayment.referenceMonth}
+                                    onChange={(e) => setEditingRecurringPayment({
+                                        ...editingRecurringPayment,
+                                        referenceMonth: e.target.value,
+                                    })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="recurring-notes">Notas (opcional)</Label>
+                                <Input
+                                    id="recurring-notes"
+                                    type="text"
+                                    value={editingRecurringPayment.notes}
+                                    onChange={(e) => setEditingRecurringPayment({
+                                        ...editingRecurringPayment,
+                                        notes: e.target.value,
+                                    })}
+                                    placeholder="Observações..."
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => {
+                            setIsRecurringPaymentDialogOpen(false);
+                            setEditingRecurringPayment(null);
+                        }}>Cancelar</Button>
+                        <Button 
+                            onClick={handleSaveRecurringPayment} 
+                            disabled={processingRecurring !== null}
+                        >
+                            {processingRecurring !== null && <Loader className="h-4 w-4 mr-2 animate-spin" />}
+                            Salvar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
