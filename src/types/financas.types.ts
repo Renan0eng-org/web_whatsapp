@@ -23,6 +23,7 @@ export interface Transaction {
   aiSuggestion?: string;
   notes?: string;
   metadata?: Record<string, any>;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

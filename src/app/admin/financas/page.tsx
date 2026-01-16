@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDateUTC } from '@/lib/date';
 import { getFinancialSummary, getTransactions } from '@/services/financas.service';
 import { FinancialSummary, Transaction } from '@/types/financas.types';
-import { AlertCircle, Loader, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertCircle, Loader, Trash2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -48,17 +48,23 @@ export default function FinancasPage() {
 
     return (
         <div className="space-y-2 sm:space-y-6 p-2 sm:p-6">
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Finanças</h1>
                     <p className="text-muted-foreground mt-2">
                         Gerencie suas transações e despesas
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button asChild>
+                <div className="flex gap-2 sm:gap-6 flex-wrap">
+                    <Button >
                         <Link href="/admin/financas/importar">Importar Extrato</Link>
                     </Button>
+                    <Link href="/admin/financas/lixeira">
+                        <Button variant="outline" className='border-red-600 text-red-600 hover:bg-red-100 hover:border-red-700 hover:text-red-700'>
+                            <Trash2 className="mr-2 h-6 w-6" />
+                            Lixeira
+                        </Button>
+                    </Link>
                 </div>
             </div>
 

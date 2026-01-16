@@ -83,6 +83,23 @@ export async function unclassifyTransaction(id: string) {
   return response.data;
 }
 
+// ===== TRASH (LIXEIRA) =====
+
+export async function getDeletedTransactions() {
+  const response = await api.get('/financas/trash');
+  return response.data;
+}
+
+export async function restoreTransaction(id: string) {
+  const response = await api.put(`/financas/trash/${id}/restore`, {});
+  return response.data;
+}
+
+export async function permanentDeleteTransaction(id: string) {
+  const response = await api.delete(`/financas/trash/${id}`);
+  return response.data;
+}
+
 // ===== IMPORT CSV =====
 
 export async function importCsv(file: File) {

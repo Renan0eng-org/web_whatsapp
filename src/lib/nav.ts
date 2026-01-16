@@ -65,6 +65,10 @@ export const data = {
           title: "Movimentações",
           url: "/admin/financas/movements",
         },
+        {
+          title: "Lixeira",
+          url: "/admin/financas/lixeira",
+        },
       ],
     },
   ],
