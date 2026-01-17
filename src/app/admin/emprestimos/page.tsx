@@ -2,6 +2,7 @@
 
 import { LoanForm } from '@/components/LoanForm';
 import MonthlyEarningsChart from '@/components/MonthlyEarningsChart';
+import { TransactionDetailsDialog } from '@/components/TransactionDetailsDialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -54,6 +55,7 @@ import {
     Edit,
     Edit2,
     Loader,
+    NotepadTextDashed,
     Plus,
     RefreshCw,
     Trash2,
@@ -87,6 +89,8 @@ export default function EmprestimosPage() {
         notes: string;
     } | null>(null);
     const [isRecurringPaymentDialogOpen, setIsRecurringPaymentDialogOpen] = useState(false);
+    const [transactionDetailsId, setTransactionDetailsId] = useState<string | null>(null);
+    const [isTransactionDetailsOpen, setIsTransactionDetailsOpen] = useState(false);
     const [newLoan, setNewLoan] = useState({
         borrowerName: '',
         items: [
@@ -1128,6 +1132,20 @@ export default function EmprestimosPage() {
                                         </CardDescription>
                                     </div>
                                     <div className="flex items-center gap-2 flex-wrap justify-end">
+                                        {loan.transactionId && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 hover:bg-sky-100 text-sky-700 border-sky-300 hover:border-sky-400"
+                                                onClick={() => {
+                                                    setTransactionDetailsId(loan.transactionId!);
+                                                    setIsTransactionDetailsOpen(true);
+                                                }}
+                                                title="Ver detalhes da transação"
+                                            >
+                                                <NotepadTextDashed className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                         <Badge variant={loan.isPaid ? 'secondary' : 'default'}>
                                             {loan.isPaid ? 'Pago' : 'Pendente'}
                                         </Badge>
@@ -1360,10 +1378,10 @@ export default function EmprestimosPage() {
                                                                                 <div
                                                                                     key={payment.idPayment}
                                                                                     className={`flex items-center justify-between p-2 rounded border ${isPastDue
-                                                                                            ? 'bg-red-50 border-red-300'
-                                                                                            : isCurrentMonth
-                                                                                                ? 'bg-yellow-50 border-yellow-300'
-                                                                                                : 'bg-white border-gray-200'
+                                                                                        ? 'bg-red-50 border-red-300'
+                                                                                        : isCurrentMonth
+                                                                                            ? 'bg-yellow-50 border-yellow-300'
+                                                                                            : 'bg-white border-gray-200'
                                                                                         }`}
                                                                                 >
                                                                                     <div className="flex-1">
@@ -1841,6 +1859,13 @@ export default function EmprestimosPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Transaction Details Dialog */}
+            <TransactionDetailsDialog
+                transactionId={transactionDetailsId}
+                open={isTransactionDetailsOpen}
+                onOpenChange={setIsTransactionDetailsOpen}
+            />
         </div>
     );
 }

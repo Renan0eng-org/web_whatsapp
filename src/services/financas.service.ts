@@ -57,13 +57,33 @@ export async function classifyTransaction(
   options?: { 
     createLoan?: boolean; 
     borrowerName?: string; 
-    loanItems?: Array<{ amount: number; dueDate: Date | string; description?: string; notes?: string }>; 
+    loanItems?: Array<{ 
+      amount: number; 
+      categoryId: string;
+      dueDate: Date | string; 
+      description?: string; 
+      notes?: string;
+      interestRate?: number;
+      interestType?: 'SIMPLE' | 'COMPOUND';
+      periodRule?: 'MENSAL' | 'ANUAL';
+      expectedProfit?: number;
+      isRecurringInterest?: boolean;
+      recurringInterestDay?: number;
+      createdAt?: Date | string;
+    }>; 
     loanPayments?: Array<{ loanId: string; amount: number; notes?: string }>;
   },
 ) {
   const response = await api.put(
     `/financas/transactions/${id}/classify`,
-    { categoryId, notes, createLoan: options?.createLoan, borrowerName: options?.borrowerName, loanItems: options?.loanItems, loanPayments: options?.loanPayments },
+    { 
+      categoryId, 
+      notes, 
+      createLoan: options?.createLoan, 
+      borrowerName: options?.borrowerName, 
+      loanItems: options?.loanItems, 
+      loanPayments: options?.loanPayments 
+    },
   );
   return response.data;
 }

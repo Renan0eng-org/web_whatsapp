@@ -1,5 +1,6 @@
 'use client';
 
+import { LoanForm } from '@/components/LoanForm';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -34,6 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDateUTC } from '@/lib/date';
+import { getLoans } from '@/services/emprestimos.service';
 import {
     classifyTransaction,
     createCategory,
@@ -135,18 +137,36 @@ export default function ClassificarPage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [categories, setCategories] = useState<ExpenseCategory[]>([]);
     const [paidLoans, setPaidLoans] = useState<any[]>([]);
+    const [unpaidLoans, setUnpaidLoans] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [classifying, setClassifying] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [notes, setNotes] = useState('');
     const [createLoan, setCreateLoan] = useState(false);
-    const [borrowerName, setBorrowerName] = useState('');
+    const [linkToExistingLoan, setLinkToExistingLoan] = useState(false);
+    const [selectedLoanId, setSelectedLoanId] = useState('');
     const [linkLoanPayments, setLinkLoanPayments] = useState(false);
     const [loanPaymentAmounts, setLoanPaymentAmounts] = useState<{ [loanId: string]: string }>({});
-    const [loanItems, setLoanItems] = useState<{ amount: string; dueDate: string; description: string; notes: string }[]>([{
-        amount: '', dueDate: '', description: '', notes: ''
-    }]);
+    const [loanFormData, setLoanFormData] = useState({
+        borrowerName: '',
+        items: [{
+            amount: '',
+            categoryId: '',
+            dueDate: '',
+            description: '',
+            notes: '',
+            interestRate: '',
+            interestType: 'SIMPLE',
+            createdAt: '',
+            periodRule: 'MENSAL',
+            marketReference: '',
+            expectedProfit: '',
+            isRecurringInterest: false,
+            recurringInterestDay: '1',
+        }],
+        transactionId: '',
+    });
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [filter, setFilter] = useState<'all' | 'unclassified'>('unclassified');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -197,17 +217,41 @@ export default function ClassificarPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [transData, catData] = await Promise.all([
+            const [transData, catData, unpaidLoansData] = await Promise.all([
                 getTransactions({ isClassified: false }),
                 getCategories(),
+                getLoans(false),
             ]);
             setTransactions(transData);
             setCategories(catData);
+            setUnpaidLoans(unpaidLoansData);
             setCurrentIndex(0);
             setSelectedCategory('');
             setNotes('');
             setLinkLoanPayments(false);
             setLoanPaymentAmounts({});
+            setCreateLoan(false);
+            setLinkToExistingLoan(false);
+            setSelectedLoanId('');
+            setLoanFormData({
+                borrowerName: '',
+                items: [{
+                    amount: '',
+                    categoryId: '',
+                    dueDate: '',
+                    description: '',
+                    notes: '',
+                    interestRate: '',
+                    interestType: 'SIMPLE',
+                    createdAt: '',
+                    periodRule: 'MENSAL',
+                    marketReference: '',
+                    expectedProfit: '',
+                    isRecurringInterest: false,
+                    recurringInterestDay: '1',
+                }],
+                transactionId: '',
+            });
         } catch (error) {
             setMessage({
                 type: 'error',
@@ -218,9 +262,46 @@ export default function ClassificarPage() {
         }
     };
 
+    const handleCalculateProfit = (idx: number) => {
+        const item = loanFormData.items[idx];
+        if (!item.amount || !item.interestRate || !item.dueDate) return;
+
+        const principal = parseFloat(item.amount);
+        const rate = parseFloat(item.interestRate) / 100;
+        const createdAt = item.createdAt ? new Date(item.createdAt) : new Date();
+        const dueDate = new Date(item.dueDate);
+        const periodRule = item.periodRule || 'MENSAL';
+        const interestType = item.interestType || 'SIMPLE';
+
+        // Se for juros recorrente, não calcula lucro previsto
+        if (item.isRecurringInterest) {
+            const items = [...loanFormData.items];
+            items[idx].expectedProfit = '0';
+            setLoanFormData({ ...loanFormData, items });
+            return;
+        }
+
+        // Calcular meses até vencimento
+        const diffTime = Math.abs(dueDate.getTime() - createdAt.getTime());
+        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30));
+
+        let profit = 0;
+        if (interestType === 'SIMPLE') {
+            const monthlyRate = periodRule === 'ANUAL' ? rate / 12 : rate;
+            profit = principal * monthlyRate * diffMonths;
+        } else {
+            const monthlyRate = periodRule === 'ANUAL' ? rate / 12 : rate;
+            profit = principal * (Math.pow(1 + monthlyRate, diffMonths) - 1);
+        }
+
+        const items = [...loanFormData.items];
+        items[idx].expectedProfit = profit.toFixed(2);
+        setLoanFormData({ ...loanFormData, items });
+    };
+
     const currentTransaction = transactions[currentIndex];
     const isOutflow = currentTransaction && currentTransaction.value < 0;
-    const loanItemsTotal = loanItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const loanItemsTotal = loanFormData.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     const transactionAbsValue = currentTransaction ? Math.abs(currentTransaction.value) : 0;
     const loansMatch = Math.abs(loanItemsTotal - transactionAbsValue) < 0.01;
 
@@ -233,8 +314,8 @@ export default function ClassificarPage() {
             return;
         }
 
-        if (createLoan && loanItems.some(i => i.amount && i.dueDate)) {
-            const itemsTotal = loanItems.filter(i => i.amount && i.dueDate).reduce((sum, i) => sum + parseFloat(i.amount), 0);
+        if (createLoan && loanFormData.items.some(i => i.amount && i.dueDate)) {
+            const itemsTotal = loanFormData.items.filter(i => i.amount && i.dueDate).reduce((sum, i) => sum + parseFloat(i.amount), 0);
             if (Math.abs(itemsTotal - transactionAbsValue) >= 0.01) {
                 setMessage({
                     type: 'error',
@@ -268,20 +349,36 @@ export default function ClassificarPage() {
                     amount: parseFloat(amount),
                 }));
 
+            // Adicionar vinculação a empréstimo existente se selecionado
+            if (linkToExistingLoan && selectedLoanId) {
+                loanPayments.push({
+                    loanId: selectedLoanId,
+                    amount: transactionAbsValue,
+                });
+            }
+
             await classifyTransaction(
                 currentTransaction.idTransaction,
                 selectedCategory,
                 notes || undefined,
                 {
                     createLoan,
-                    borrowerName: borrowerName || undefined,
-                    loanItems: createLoan ? loanItems
-                        .filter(i => i.amount && i.dueDate)
+                    borrowerName: loanFormData.borrowerName || undefined,
+                    loanItems: createLoan ? loanFormData.items
+                        .filter(i => i.amount && i.dueDate && i.categoryId)
                         .map(i => ({
                             amount: parseFloat(i.amount),
+                            categoryId: i.categoryId,
                             dueDate: new Date(i.dueDate),
                             description: i.description || undefined,
                             notes: i.notes || undefined,
+                            interestRate: i.interestRate ? parseFloat(i.interestRate) : undefined,
+                            interestType: i.interestType as any,
+                            periodRule: i.periodRule as any,
+                            expectedProfit: i.expectedProfit ? parseFloat(i.expectedProfit) : undefined,
+                            isRecurringInterest: i.isRecurringInterest,
+                            recurringInterestDay: i.recurringInterestDay ? parseInt(i.recurringInterestDay) : undefined,
+                            createdAt: i.createdAt ? new Date(i.createdAt) : undefined,
                         })) : undefined,
                     loanPayments: loanPayments.length > 0 ? loanPayments : undefined,
                 },
@@ -302,9 +399,28 @@ export default function ClassificarPage() {
                 setSelectedCategory('');
                 setNotes('');
                 setCreateLoan(false);
-                setBorrowerName('');
+                setLinkToExistingLoan(false);
+                setSelectedLoanId('');
                 setLoanPaymentAmounts({});
-                setLoanItems([{ amount: '', dueDate: '', description: '', notes: '' }]);
+                setLoanFormData({
+                    borrowerName: '',
+                    items: [{
+                        amount: '',
+                        categoryId: '',
+                        dueDate: '',
+                        description: '',
+                        notes: '',
+                        interestRate: '',
+                        interestType: 'SIMPLE',
+                        createdAt: '',
+                        periodRule: 'MENSAL',
+                        marketReference: '',
+                        expectedProfit: '',
+                        isRecurringInterest: false,
+                        recurringInterestDay: '1',
+                    }],
+                    transactionId: '',
+                });
             }
 
             setTimeout(() => setMessage(null), 3000);
@@ -348,8 +464,27 @@ export default function ClassificarPage() {
                 setSelectedCategory('');
                 setNotes('');
                 setCreateLoan(false);
-                setBorrowerName('');
-                setLoanItems([{ amount: '', dueDate: '', description: '', notes: '' }]);
+                setLinkToExistingLoan(false);
+                setSelectedLoanId('');
+                setLoanFormData({
+                    borrowerName: '',
+                    items: [{
+                        amount: '',
+                        categoryId: '',
+                        dueDate: '',
+                        description: '',
+                        notes: '',
+                        interestRate: '',
+                        interestType: 'SIMPLE',
+                        createdAt: '',
+                        periodRule: 'MENSAL',
+                        marketReference: '',
+                        expectedProfit: '',
+                        isRecurringInterest: false,
+                        recurringInterestDay: '1',
+                    }],
+                    transactionId: '',
+                });
                 setLinkLoanPayments(false);
                 setLoanPaymentAmounts({});
             }
@@ -561,105 +696,85 @@ export default function ClassificarPage() {
                             </div>
 
                             {isOutflow && (
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Criar como Empréstimo</label>
-                                    <div className="flex items-center gap-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={createLoan}
-                                            onChange={(e) => setCreateLoan(e.target.checked)}
-                                        />
-                                        <span className="text-sm text-muted-foreground">Ao classificar, criar um empréstimo com este valor</span>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Criar como Empréstimo</label>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={createLoan}
+                                                onChange={(e) => {
+                                                    setCreateLoan(e.target.checked);
+                                                    if (e.target.checked) {
+                                                        setLinkToExistingLoan(false);
+                                                    }
+                                                }}
+                                            />
+                                            <span className="text-sm text-muted-foreground">Criar um novo empréstimo com este valor</span>
+                                        </div>
                                     </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Vincular a Empréstimo Existente</label>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={linkToExistingLoan}
+                                                onChange={(e) => {
+                                                    setLinkToExistingLoan(e.target.checked);
+                                                    if (e.target.checked) {
+                                                        setCreateLoan(false);
+                                                    }
+                                                }}
+                                            />
+                                            <span className="text-sm text-muted-foreground">Esta saída é um pagamento de empréstimo</span>
+                                        </div>
+                                        
+                                        {linkToExistingLoan && (
+                                            <div className="space-y-2 mt-2">
+                                                <label className="text-sm font-medium">Selecione o Empréstimo</label>
+                                                <Select
+                                                    value={selectedLoanId}
+                                                    onValueChange={setSelectedLoanId}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Selecione um empréstimo" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {unpaidLoans.map((loan) => (
+                                                            <SelectItem key={loan.idLoan} value={loan.idLoan}>
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-medium">{loan.borrowerName || 'Sem nome'}</span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {loan.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} 
+                                                                        {' - Vencimento: '}{formatDateUTC(loan.dueDate)}
+                                                                        {loan.remainingBalance > 0 && ` - Pendente: ${loan.remainingBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+                                                                    </span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {createLoan && (
-                                        <div className="space-y-4 mt-2">
-                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+                                        <div className="space-y-4 mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                                            <div className="flex items-center justify-between">
                                                 <p className="font-semibold text-blue-900">Total: {loanItemsTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                                <p className={`text-sm mt-1 ${loansMatch ? 'text-green-600' : 'text-orange-600'}`}>
+                                                <p className={`text-sm ${loansMatch ? 'text-green-600' : 'text-orange-600'}`}>
                                                     {loansMatch ? '✓ Soma confere' : `⚠ Deve ser ${transactionAbsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
                                                 </p>
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium">Nome de quem pediu emprestado (opcional)</label>
-                                                <Input
-                                                    value={borrowerName}
-                                                    onChange={(e) => setBorrowerName(e.target.value)}
-                                                    placeholder="Ex: João Silva"
-                                                />
-                                            </div>
-
-                                            <div className="flex items-center justify-between">
-                                                <label className="text-sm font-medium">Parcelas</label>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setLoanItems([...loanItems, { amount: '', dueDate: '', description: '', notes: '' }])}
-                                                >Adicionar parcela</Button>
-                                            </div>
-
-                                            {loanItems.map((item, idx) => (
-                                                <div key={idx} className="grid md:grid-cols-2 gap-3 p-3 border rounded">
-                                                    <div className="space-y-2">
-                                                        <label className="text-sm font-medium">Valor *</label>
-                                                        <Input
-                                                            type="number"
-                                                            step="0.01"
-                                                            value={item.amount}
-                                                            onChange={(e) => {
-                                                                const items = [...loanItems];
-                                                                items[idx].amount = e.target.value;
-                                                                setLoanItems(items);
-                                                            }}
-                                                            placeholder="0,00"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-sm font-medium">Data de Pagamento *</label>
-                                                        <Input
-                                                            type="date"
-                                                            value={item.dueDate}
-                                                            onChange={(e) => {
-                                                                const items = [...loanItems];
-                                                                items[idx].dueDate = e.target.value;
-                                                                setLoanItems(items);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-sm font-medium">Descrição (opcional)</label>
-                                                        <Input
-                                                            value={item.description}
-                                                            onChange={(e) => {
-                                                                const items = [...loanItems];
-                                                                items[idx].description = e.target.value;
-                                                                setLoanItems(items);
-                                                            }}
-                                                            placeholder="Motivo do empréstimo..."
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2 md:col-span-2">
-                                                        <label className="text-sm font-medium">Notas (opcional)</label>
-                                                        <Textarea
-                                                            value={item.notes}
-                                                            onChange={(e) => {
-                                                                const items = [...loanItems];
-                                                                items[idx].notes = e.target.value;
-                                                                setLoanItems(items);
-                                                            }}
-                                                            placeholder="Notas adicionais..."
-                                                            rows={2}
-                                                        />
-                                                    </div>
-                                                    <div className="flex justify-end md:col-span-2">
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            onClick={() => setLoanItems(loanItems.filter((_, i) => i !== idx))}
-                                                        >Remover</Button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                            <LoanForm
+                                                formData={loanFormData}
+                                                categories={categories}
+                                                onFormChange={setLoanFormData}
+                                                onCalculateProfit={handleCalculateProfit}
+                                                mode="create"
+                                            />
                                         </div>
                                     )}
                                 </div>
