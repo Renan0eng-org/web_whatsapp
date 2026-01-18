@@ -21,8 +21,9 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { RecurringExpense } from '@/types/recurring-expense.types';
-import { Loader } from 'lucide-react';
+import { Camera, Loader } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { QrScannerDialog } from './QrScannerDialog';
 
 interface Category {
     idCategory: string;
@@ -72,6 +73,8 @@ export function ExpenseFormDialog({
         recurringEndDate: '',
     });
 
+    const [showQrScanner, setShowQrScanner] = useState(false);
+
     useEffect(() => {
         if (expense) {
             // Modo edição - normaliza possíveis Date para string
@@ -109,6 +112,11 @@ export function ExpenseFormDialog({
 
     const handleSubmit = async () => {
         await onSubmit(formData);
+    };
+
+    const handleQrScanResult = (result: string) => {
+        setFormData({ ...formData, qrCode: result });
+        setShowQrScanner(false);
     };
 
     const isEditing = !!expense;
@@ -255,7 +263,19 @@ export function ExpenseFormDialog({
                     )}
 
                     <div className="space-y-2">
-                        <Label>QR Code / Código de Barras</Label>
+                        <div className="flex items-center justify-between">
+                            <Label>QR Code / Código de Barras</Label>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowQrScanner(true)}
+                                className="flex items-center gap-2"
+                            >
+                                <Camera className="h-4 w-4" />
+                                Escanear
+                            </Button>
+                        </div>
                         <Textarea
                             value={formData.qrCode}
                             onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })}
@@ -263,7 +283,7 @@ export function ExpenseFormDialog({
                             rows={3}
                         />
                         <p className="text-xs text-muted-foreground">
-                            💡 Cole o código do PIX ou digitalize um código de barras
+                            💡 Cole o código do PIX, digitalize um código de barras ou use a câmera para escanear
                         </p>
                     </div>
                 </div>
@@ -278,6 +298,12 @@ export function ExpenseFormDialog({
                     </Button>
                 </DialogFooter>
             </DialogContent>
+
+            <QrScannerDialog
+                open={showQrScanner}
+                onOpenChange={setShowQrScanner}
+                onResult={handleQrScanResult}
+            />
         </Dialog>
     );
 }
