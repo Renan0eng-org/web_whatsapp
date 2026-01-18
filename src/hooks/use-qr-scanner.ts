@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
 import QrScanner from 'qr-scanner';
+import { useCallback, useRef, useState } from 'react';
 
 interface UseQrScannerReturn {
   isScanning: boolean;
