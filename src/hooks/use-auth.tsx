@@ -62,6 +62,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const path = usePathname();
 
+  // Rotas públicas que não precisam de autenticação
+  const publicRoutes = ['/auth/login', '/auth/sign-up', '/admin/rsvp'];
+
   useEffect(() => {
     const loadSession = async () => {
       try {
@@ -69,7 +72,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(data)
       } catch (err) {
         console.error("Nenhuma sessão válida encontrada.", err)
-        if (path !== '/auth/login' && path !== '/auth/sign-up') {
+        if (!publicRoutes.some(route => path === route || path?.startsWith(route + '/'))) {
           router.push('/auth/login')
         }
         setUser(null)
