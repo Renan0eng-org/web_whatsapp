@@ -3,42 +3,42 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import {
+    generateDocId,
+    rsvpDb,
+    type SavedDocument,
+} from "@/lib/rsvp-database";
 import { cn } from "@/lib/utils";
 import {
-  rsvpDb,
-  generateDocId,
-  type SavedDocument,
-} from "@/lib/rsvp-database";
-import {
-  BookOpen,
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  FolderOpen,
-  Maximize2,
-  Minimize2,
-  Pause,
-  Play,
-  RotateCcw,
-  Save,
-  Settings,
-  Trash2,
-  Upload,
-  X,
+    BookOpen,
+    ChevronDown,
+    ChevronUp,
+    FileText,
+    FolderOpen,
+    Maximize2,
+    Minimize2,
+    Pause,
+    Play,
+    RotateCcw,
+    Save,
+    Settings,
+    Trash2,
+    Upload,
+    X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import pdfToText from "react-pdftotext";
