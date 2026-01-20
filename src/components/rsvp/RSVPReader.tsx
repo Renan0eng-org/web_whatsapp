@@ -1,37 +1,37 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { 
-  Play, 
-  Pause, 
-  Upload, 
-  Maximize2, 
-  Minimize2, 
-  Settings, 
-  RotateCcw,
-  ChevronUp,
-  ChevronDown,
-  FileText,
-  X
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import {
+    ChevronDown,
+    ChevronUp,
+    FileText,
+    Maximize2,
+    Minimize2,
+    Pause,
+    Play,
+    RotateCcw,
+    Settings,
+    Upload,
+    X
+} from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import pdfToText from "react-pdftotext";
 
 // Tipos
