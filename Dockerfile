@@ -1,4 +1,5 @@
-FROM node:20 AS builder
+# Stage 1: Build
+FROM node:22 AS builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -7,7 +8,8 @@ RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
-FROM node:20 AS runner
+# Stage 2: Run
+FROM node:22 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
