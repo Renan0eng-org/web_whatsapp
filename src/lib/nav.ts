@@ -1,5 +1,6 @@
 import {
   BadgeDollarSign,
+  BookOpen,
   Home,
   MessagesSquare,
   Shield,
@@ -18,6 +19,13 @@ export const data = {
       title: "Home",
       url: "/admin",
       icon: Home,
+      isActive: false,
+      nivel_acesso: "",
+    },
+    {
+      title: "Leitor RSVP",
+      url: "/admin/rsvp",
+      icon: BookOpen,
       isActive: false,
       nivel_acesso: "",
     },
