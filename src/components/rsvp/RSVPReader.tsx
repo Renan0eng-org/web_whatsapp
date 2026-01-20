@@ -3,33 +3,42 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
-    ChevronDown,
-    ChevronUp,
-    FileText,
-    Maximize2,
-    Minimize2,
-    Pause,
-    Play,
-    RotateCcw,
-    Settings,
-    Upload,
-    X
+  rsvpDb,
+  generateDocId,
+  type SavedDocument,
+} from "@/lib/rsvp-database";
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  FolderOpen,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Save,
+  Settings,
+  Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import pdfToText from "react-pdftotext";
@@ -50,6 +59,7 @@ interface RSVPState {
   isFullscreen: boolean;
   text: string;
   fileName: string;
+  documentId: string | null;
 }
 
 // Constantes
@@ -97,6 +107,16 @@ const endsWithPunctuation = (word: string): boolean => {
   return /[.,;:!?]$/.test(word);
 };
 
+// Formatar data
+const formatDate = (timestamp: number): string => {
+  return new Date(timestamp).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export default function RSVPReader() {
   // Estados
   const [settings, setSettings] = useState<RSVPSettings>(DEFAULT_SETTINGS);
@@ -107,14 +127,29 @@ export default function RSVPReader() {
     isFullscreen: false,
     text: "",
     fileName: "",
+    documentId: null,
   });
   const [controlsOpen, setControlsOpen] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [savedDocuments, setSavedDocuments] = useState<SavedDocument[]>([]);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const savePositionRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Carregar documentos salvos
+  const loadSavedDocuments = useCallback(async () => {
+    try {
+      const docs = await rsvpDb.getAllDocuments();
+      setSavedDocuments(docs);
+    } catch (error) {
+      console.error("Erro ao carregar documentos:", error);
+    }
+  }, []);
 
   // Carregar configurações do localStorage
   useEffect(() => {
@@ -127,12 +162,30 @@ export default function RSVPReader() {
         console.error("Erro ao carregar configurações:", e);
       }
     }
-  }, []);
+    loadSavedDocuments();
+  }, [loadSavedDocuments]);
 
   // Salvar configurações no localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  // Salvar posição automaticamente com debounce
+  useEffect(() => {
+    if (state.documentId && state.currentIndex > 0) {
+      if (savePositionRef.current) {
+        clearTimeout(savePositionRef.current);
+      }
+      savePositionRef.current = setTimeout(() => {
+        rsvpDb.updateLastPosition(state.documentId!, state.currentIndex);
+      }, 1000);
+    }
+    return () => {
+      if (savePositionRef.current) {
+        clearTimeout(savePositionRef.current);
+      }
+    };
+  }, [state.currentIndex, state.documentId]);
 
   // Calcular intervalo baseado no WPM
   const calculateInterval = useCallback(
@@ -176,7 +229,13 @@ export default function RSVPReader() {
         }
       };
     }
-  }, [state.isPlaying, state.currentIndex, calculateInterval, advanceWord, state.words]);
+  }, [
+    state.isPlaying,
+    state.currentIndex,
+    calculateInterval,
+    advanceWord,
+    state.words,
+  ]);
 
   // Processar texto em palavras
   const processText = (text: string): string[] => {
@@ -188,8 +247,10 @@ export default function RSVPReader() {
   };
 
   // Carregar arquivo de texto
-  const handleFileUpload = async (file: File) => {
-    const extension = file.name.split(".").pop()?.toLowerCase();
+  const handleFileUpload = async (file: File, saveToDb: boolean = true) => {
+    const extension = file.name.split(".").pop()?.toLowerCase() as
+      | "txt"
+      | "pdf";
 
     try {
       let text = "";
@@ -204,6 +265,25 @@ export default function RSVPReader() {
       }
 
       const words = processText(text);
+      let documentId: string | null = null;
+
+      // Salvar no IndexedDB se solicitado
+      if (saveToDb) {
+        documentId = generateDocId();
+        const doc: SavedDocument = {
+          id: documentId,
+          name: file.name,
+          text,
+          wordCount: words.length,
+          createdAt: Date.now(),
+          lastReadAt: Date.now(),
+          lastPosition: 0,
+          fileType: extension,
+        };
+        await rsvpDb.saveDocument(doc);
+        await loadSavedDocuments();
+      }
+
       setState((prev) => ({
         ...prev,
         text,
@@ -211,18 +291,77 @@ export default function RSVPReader() {
         currentIndex: 0,
         isPlaying: false,
         fileName: file.name,
+        documentId,
       }));
+      setShowLibrary(false);
     } catch (error) {
       console.error("Erro ao processar arquivo:", error);
       alert("Erro ao processar o arquivo. Tente novamente.");
     }
   };
 
+  // Carregar documento salvo
+  const loadSavedDocument = async (doc: SavedDocument) => {
+    const words = processText(doc.text);
+    setState((prev) => ({
+      ...prev,
+      text: doc.text,
+      words,
+      currentIndex: doc.lastPosition,
+      isPlaying: false,
+      fileName: doc.name,
+      documentId: doc.id,
+    }));
+    await rsvpDb.updateLastPosition(doc.id, doc.lastPosition);
+    setShowLibrary(false);
+  };
+
+  // Deletar documento
+  const deleteDocument = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("Tem certeza que deseja excluir este documento?")) {
+      await rsvpDb.deleteDocument(id);
+      await loadSavedDocuments();
+      if (state.documentId === id) {
+        handleClear();
+      }
+    }
+  };
+
+  // Salvar documento atual
+  const saveCurrentDocument = async () => {
+    if (!state.text || !state.fileName) return;
+
+    setIsSaving(true);
+    try {
+      const extension = state.fileName.split(".").pop()?.toLowerCase() as
+        | "txt"
+        | "pdf";
+      const documentId = state.documentId || generateDocId();
+      const doc: SavedDocument = {
+        id: documentId,
+        name: state.fileName,
+        text: state.text,
+        wordCount: state.words.length,
+        createdAt: Date.now(),
+        lastReadAt: Date.now(),
+        lastPosition: state.currentIndex,
+        fileType: extension || "txt",
+      };
+      await rsvpDb.saveDocument(doc);
+      setState((prev) => ({ ...prev, documentId }));
+      await loadSavedDocuments();
+    } catch (error) {
+      console.error("Erro ao salvar documento:", error);
+    }
+    setIsSaving(false);
+  };
+
   // Manipulador de input de arquivo
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFileUpload(file);
+      handleFileUpload(file, true);
     }
   };
 
@@ -242,14 +381,14 @@ export default function RSVPReader() {
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      handleFileUpload(file);
+      handleFileUpload(file, true);
     }
   };
 
   // Toggle Play/Pause
   const togglePlay = useCallback(() => {
     if (state.words.length === 0) return;
-    
+
     if (state.currentIndex >= state.words.length) {
       setState((prev) => ({ ...prev, currentIndex: 0, isPlaying: true }));
     } else {
@@ -271,6 +410,7 @@ export default function RSVPReader() {
       isFullscreen: false,
       text: "",
       fileName: "",
+      documentId: null,
     });
   };
 
@@ -319,7 +459,7 @@ export default function RSVPReader() {
   // Obter palavras atuais para exibição
   const getCurrentWords = (): string => {
     if (state.words.length === 0) return "";
-    
+
     const words = state.words.slice(
       state.currentIndex,
       state.currentIndex + settings.wordsPerDisplay
@@ -338,15 +478,25 @@ export default function RSVPReader() {
     setSettings((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Handle slider de progresso
+  const handleProgressSliderChange = (value: number[]) => {
+    if (state.words.length === 0) return;
+    const newIndex = Math.floor((value[0] / 100) * state.words.length);
+    setState((prev) => ({
+      ...prev,
+      currentIndex: Math.max(0, Math.min(newIndex, prev.words.length - 1)),
+    }));
+  };
+
   // Handle progress bar click
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (state.words.length === 0) return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = clickX / rect.width;
     const newIndex = Math.floor(percentage * state.words.length);
-    
+
     setState((prev) => ({
       ...prev,
       currentIndex: Math.max(0, Math.min(newIndex, prev.words.length - 1)),
@@ -361,45 +511,99 @@ export default function RSVPReader() {
         state.isFullscreen && "fixed inset-0 z-50 bg-background"
       )}
     >
-      {/* Área de Upload (quando não há texto) */}
+      {/* Área de Upload/Biblioteca (quando não há texto) */}
       {state.words.length === 0 && (
-        <Card className="m-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-text">
-              <FileText className="h-5 w-5" />
-              Leitor RSVP
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={cn(
-                "border-2 border-dashed rounded-lg p-8 md:p-12 text-center cursor-pointer transition-colors",
-                isDragging
-                  ? "border-primary bg-primary/10"
-                  : "border-border hover:border-primary/50"
-              )}
-            >
-              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-lg font-medium text-text mb-2">
-                Arraste um arquivo ou clique para selecionar
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Suporta arquivos .txt e .pdf
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".txt,.pdf"
-                onChange={handleInputChange}
-                className="hidden"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="m-4 space-y-4">
+          {/* Upload Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-text">
+                <FileText className="h-5 w-5" />
+                Leitor RSVP
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-8 md:p-12 text-center cursor-pointer transition-colors",
+                  isDragging
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-medium text-text mb-2">
+                  Arraste um arquivo ou clique para selecionar
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Suporta arquivos .txt e .pdf (serão salvos automaticamente)
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.pdf"
+                  onChange={handleInputChange}
+                  className="hidden"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Biblioteca de documentos salvos */}
+          {savedDocuments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-text text-lg">
+                  <FolderOpen className="h-5 w-5" />
+                  Biblioteca ({savedDocuments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {savedDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      onClick={() => loadSavedDocument(doc)}
+                      className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors group"
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        <BookOpen className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-text truncate">
+                          {doc.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.wordCount} palavras
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(doc.lastReadAt)}
+                        </p>
+                        {doc.lastPosition > 0 && (
+                          <p className="text-xs text-primary">
+                            {Math.round((doc.lastPosition / doc.wordCount) * 100)}% lido
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => deleteDocument(doc.id, e)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Área de Leitura */}
@@ -416,22 +620,68 @@ export default function RSVPReader() {
                 ({state.words.length} palavras)
               </span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClear}
-              className="h-8"
-            >
-              <X className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Fechar</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              {!state.documentId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={saveCurrentDocument}
+                  disabled={isSaving}
+                  className="h-8"
+                  title="Salvar na biblioteca"
+                >
+                  <Save className="h-4 w-4" />
+                  <span className="hidden sm:inline ml-1">Salvar</span>
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowLibrary(!showLibrary)}
+                className="h-8"
+                title="Biblioteca"
+              >
+                <FolderOpen className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClear}
+                className="h-8"
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">Fechar</span>
+              </Button>
+            </div>
           </div>
+
+          {/* Biblioteca colapsável */}
+          {showLibrary && savedDocuments.length > 0 && (
+            <div className="border-b bg-muted/50 p-3 max-h-48 overflow-auto scrollable">
+              <div className="flex flex-wrap gap-2">
+                {savedDocuments.map((doc) => (
+                  <Button
+                    key={doc.id}
+                    variant={state.documentId === doc.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => loadSavedDocument(doc)}
+                    className="h-auto py-1 px-2 text-xs"
+                  >
+                    <BookOpen className="h-3 w-3 mr-1" />
+                    <span className="truncate max-w-[100px]">{doc.name}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Área de Exibição da Palavra */}
           <div
             className={cn(
               "flex-1 flex items-center justify-center bg-background select-none",
-              state.isFullscreen ? "min-h-screen" : "min-h-[200px] sm:min-h-[300px] md:min-h-[400px]"
+              state.isFullscreen
+                ? "min-h-screen"
+                : "min-h-[200px] sm:min-h-[300px] md:min-h-[400px]"
             )}
             onClick={togglePlay}
           >
@@ -453,7 +703,7 @@ export default function RSVPReader() {
             </div>
           </div>
 
-          {/* Barra de Progresso */}
+          {/* Barra de Progresso Visual */}
           <div
             className="h-2 bg-secondary cursor-pointer"
             onClick={handleProgressClick}
@@ -462,6 +712,26 @@ export default function RSVPReader() {
               className="h-full bg-primary transition-all duration-100"
               style={{ width: `${progress}%` }}
             />
+          </div>
+
+          {/* Slider de Navegação */}
+          <div className="px-4 py-2 bg-card border-t">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-12 text-right">
+                {state.currentIndex}
+              </span>
+              <Slider
+                value={[progress]}
+                onValueChange={handleProgressSliderChange}
+                min={0}
+                max={100}
+                step={0.1}
+                className="flex-1"
+              />
+              <span className="text-xs text-muted-foreground w-12">
+                {state.words.length}
+              </span>
+            </div>
           </div>
 
           {/* Controles (Desktop) */}
@@ -505,7 +775,8 @@ export default function RSVPReader() {
 
             {/* Progresso textual */}
             <div className="text-sm text-muted-foreground">
-              {state.currentIndex} / {state.words.length}
+              {state.currentIndex} / {state.words.length} (
+              {Math.round(progress)}%)
             </div>
 
             {/* Controles de Velocidade */}
@@ -576,11 +847,7 @@ export default function RSVPReader() {
           <div className="md:hidden">
             {/* Controles principais fixos */}
             <div className="flex items-center justify-between px-4 py-3 bg-card border-t">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleReset}
-              >
+              <Button variant="outline" size="icon" onClick={handleReset}>
                 <RotateCcw className="h-4 w-4" />
               </Button>
 
@@ -655,7 +922,9 @@ export default function RSVPReader() {
                   {/* Tamanho do texto */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-sm text-text">Tamanho do Texto</Label>
+                      <Label className="text-sm text-text">
+                        Tamanho do Texto
+                      </Label>
                       <span className="text-sm text-muted-foreground">
                         {settings.fontSize}px
                       </span>
@@ -693,7 +962,9 @@ export default function RSVPReader() {
                       <Label className="text-sm text-text">Opções</Label>
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">ORP</span>
+                          <span className="text-sm text-muted-foreground">
+                            ORP
+                          </span>
                           <Switch
                             checked={settings.showORP}
                             onCheckedChange={(v) => updateSettings("showORP", v)}
@@ -723,9 +994,20 @@ export default function RSVPReader() {
       {/* Instruções de atalhos (quando há texto) */}
       {state.words.length > 0 && !state.isFullscreen && (
         <div className="hidden lg:flex items-center justify-center gap-6 py-2 text-xs text-muted-foreground bg-muted/50">
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border">Espaço</kbd> Play/Pause</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border">R</kbd> Reset</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border">F</kbd> Fullscreen</span>
+          <span>
+            <kbd className="px-1.5 py-0.5 rounded bg-background border">
+              Espaço
+            </kbd>{" "}
+            Play/Pause
+          </span>
+          <span>
+            <kbd className="px-1.5 py-0.5 rounded bg-background border">R</kbd>{" "}
+            Reset
+          </span>
+          <span>
+            <kbd className="px-1.5 py-0.5 rounded bg-background border">F</kbd>{" "}
+            Fullscreen
+          </span>
           <span>Clique na área de leitura para Play/Pause</span>
         </div>
       )}

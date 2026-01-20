@@ -1,4 +1,5 @@
-import RSVPReader from "@/components/rsvp/RSVPReader";
+import { RSVPReader } from "@/components/rsvp";
+
 
 export default function RSVPPage() {
   return (
