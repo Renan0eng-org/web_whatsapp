@@ -27,8 +27,4 @@ jobs:
         run: |
           docker rm -f web-whatsapp || true
           docker pull devnardi/web-whatsapp:latest
-          docker run -d \
-            --name web-whatsapp \
-            -p 3030:3000 \
-            --network n8n_net \
-            devnardi/web-whatsapp:latest
+          docker run -d --name web-whatsapp -p 3030:3000 --network n8n_net devnardi/web-whatsapp:latest
