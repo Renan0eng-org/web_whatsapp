@@ -1,4 +1,4 @@
-name: Deploy Frontend WhatsApp
+name: Deploy Frontend WhatsApp (PM2)
 
 on:
   push:
@@ -13,18 +13,20 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Login no Docker Hub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+      - name: Instalar dependências
+        run: npm ci
 
-      - name: Build e push da imagem
-        run: |
-          docker build \
-            --build-arg NEXT_PUBLIC_API_URL="https://whatsapp.back.renannardi.com" \
-            -t devnardi/web-whatsapp:latest .
-          docker push devnardi/web-whatsapp:latest
+      - name: Build do Next.js
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://whatsapp.back.renannardi.com
 
-      - name: Subindo novo container
+      - name: Deploy com PM2
         run: |
-          docker rm -f web-whatsapp || true
-          docker pull devnardi/web-whatsapp:latest
-          docker run -d --name web-whatsapp -p 3030:3000 devnardi/web-whatsapp:latest
+          pm2 stop web-whatsapp || true
+          pm2 delete web-whatsapp || true
+          pm2 start npm \
+            --name web-whatsapp \
+            -- start \
+            -- -p 3000
+          pm2 save
