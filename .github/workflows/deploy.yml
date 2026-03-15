@@ -13,8 +13,25 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Mostrar versão do node
+        run: |
+          node -v
+          which node
+          npm -v
+
+      - name: Clean
+        run: |
+          rm -rf node_modules
+          rm -rf .next
+          rm -f package-lock.json
+
       - name: Instalar dependências
-        run: npm i --legacy-peer-deps
+        run: npm install --legacy-peer-deps
 
       - name: Build do Next.js
         run: npm run build
@@ -23,10 +40,15 @@ jobs:
 
       - name: Deploy com PM2
         run: |
+          node -v
+          which node
+
           pm2 stop web-whatsapp || true
           pm2 delete web-whatsapp || true
+
           pm2 start npm \
             --name web-whatsapp \
             -- start \
-            -- -p 3000
+            -- -p 3030
+
           pm2 save
