@@ -2,6 +2,8 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://whatsapp.back.renannardi.com'
 
+console.log('[api] BASE_URL:', BASE_URL)
+
 const api = axios.create({
     baseURL: BASE_URL,
     withCredentials: true,
