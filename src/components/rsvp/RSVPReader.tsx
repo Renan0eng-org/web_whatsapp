@@ -1,6 +1,3 @@
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-
 "use client";
 
 import { Button } from "@/components/ui/button";
