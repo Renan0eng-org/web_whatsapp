@@ -134,6 +134,63 @@ export async function importCsv(file: File) {
   return response.data;
 }
 
+export async function getImportHistory() {
+  const response = await api.get('/financas/import-csv/history');
+  return response.data;
+}
+
+export async function revertImportBatch(batchId: string) {
+  const response = await api.post(`/financas/import-csv/${batchId}/revert`, {});
+  return response.data;
+}
+
+function getFileNameFromContentDisposition(contentDisposition?: string, fallback = 'arquivo.csv') {
+  if (!contentDisposition) return fallback;
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+  const simpleMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  if (simpleMatch?.[1]) return simpleMatch[1];
+  return fallback;
+}
+
+function triggerBlobDownload(data: BlobPart, fileName: string, mimeType?: string) {
+  const blob = new Blob([data], { type: mimeType || 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadImportedCsv(batchId: string) {
+  const response = await api.get(`/financas/import-csv/${batchId}/download`, {
+    responseType: 'blob',
+  });
+
+  const fileName = getFileNameFromContentDisposition(
+    response.headers['content-disposition'],
+    `importacao_${batchId}.csv`,
+  );
+
+  triggerBlobDownload(response.data, fileName, response.data?.type);
+}
+
+export async function downloadCsvTemplate() {
+  const response = await api.get('/financas/import-csv/template', {
+    responseType: 'blob',
+  });
+
+  const fileName = getFileNameFromContentDisposition(
+    response.headers['content-disposition'],
+    'modelo_importacao_financas.csv',
+  );
+
+  triggerBlobDownload(response.data, fileName, response.data?.type);
+}
+
 // ===== STATISTICS =====
 
 export async function getFinancialSummary(params?: {

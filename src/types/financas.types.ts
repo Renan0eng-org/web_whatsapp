@@ -40,6 +40,33 @@ export interface FinancialSummary {
 
 export interface ImportResult {
   success: boolean;
+  importBatchId: string;
   imported: number;
+  restoredFromTrash: number;
+  skipped: number;
   message: string;
+}
+
+export interface ImportHistoryItem {
+  idImportBatch: string;
+  userId: string;
+  importedFileId: string;
+  batchType: 'IMPORT' | 'REIMPORT';
+  status: 'IMPORTED' | 'REVERTED';
+  importedCount: number;
+  restoredFromTrashCount: number;
+  skippedCount: number;
+  movedToTrashCount: number;
+  deletedCount: number;
+  revertedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  importedFile: {
+    idImportedFile: string;
+    originalName: string;
+    storedName: string;
+    mimeType?: string;
+    fileSize: number;
+    importedAt: string;
+  };
 }
